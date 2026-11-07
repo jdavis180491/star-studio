@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, briefRef } from '../api.js';
-import { playLines, stopDirector } from '../speech/directorVoice.js';
+import { playLines, stopDirector, primeDirectorAudio } from '../speech/directorVoice.js';
 import { createRecognizer, speechSupported } from '../speech/recognizer.js';
 import { unlockAudio } from '../sfx.js';
 
@@ -52,6 +52,7 @@ export default function Director({ brief, onBack, onDone }) {
 
   const start = async () => {
     unlockAudio();
+    primeDirectorAudio();
     setStarted(true);
     setThinking(true);
     try {
@@ -98,6 +99,7 @@ export default function Director({ brief, onBack, onDone }) {
 
   const listen = () => {
     unlockAudio();
+    primeDirectorAudio();
     stopDirector();
     if (listening) {
       // Second tap = "I'm done talking".
@@ -178,7 +180,7 @@ export default function Director({ brief, onBack, onDone }) {
             {choices && (
               <div className="choice-row">
                 {choices.map((c) => (
-                  <button key={c.id} className="choice" disabled={busy} onClick={() => submit(c.label)}>
+                  <button key={c.id} className="choice" disabled={busy} onClick={() => { primeDirectorAudio(); submit(c.label); }}>
                     <span className="choice-icon">{c.icon}</span>
                     {c.label}
                   </button>

@@ -4,7 +4,7 @@ import { dayISO, addDays, isISODate } from '../lib/dates.js';
 import { TRACKS, chooseKeywords, sampleFor, KEYWORDS_PER_BRIEF } from '../lib/briefs.js';
 import { wordsFor, pickWords, YEAR_GROUPS, YEAR_LABELS } from '../data/wordBank.js';
 import { claudeEnabled, generateBrief, briefProblems, MODEL } from '../ai/claude.js';
-import { voiceEnabled, listVoices, registerLine, DEFAULT_VOICE } from '../ai/voice.js';
+import { voiceEnabled, listVoices, registerLine, lineAudio, voiceStatus, DEFAULT_VOICE } from '../ai/voice.js';
 import { rateLimit } from '../lib/rateLimit.js';
 
 const cleanWords = (list) =>
@@ -140,10 +140,20 @@ export function parentRouter(store) {
     }
   });
 
-  r.post('/voice-test', async (req, res) => {
-    const { channelName } = await store.getSettings();
-    res.json(registerLine(`Hey ${channelName}! I'm your Director. Ready to make something brilliant?`, req.body?.voiceId));
+  // Registers a test line and checks ElevenLabs straight away, so problems show on screen.
+  r.post('/voice-test', async (req, res, next) => {
+    try {
+      const { channelName } = await store.getSettings();
+      const line = registerLine(`Hey ${channelName}! I'm your Director. Ready to make something brilliant?`, req.body?.voiceId);
+      if (!voiceEnabled()) return res.json({ ...line, ok: false, hint: 'No ELEVENLABS_API_KEY found, so the iPad voice is used.' });
+      const out = await lineAudio(line.id);
+      res.json({ ...line, ok: out.status === 200, hint: out.error?.hint, detail: out.error?.detail });
+    } catch (e) {
+      next(e);
+    }
   });
+
+  r.get('/voice-status', (req, res) => res.json(voiceStatus()));
 
   return r;
 }

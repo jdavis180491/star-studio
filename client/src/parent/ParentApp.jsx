@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { parentApi, parentToken } from '../api.js';
 import { tokenizeBrief, normalizeWord, isKeywordForm } from '../reading/words.js';
-import { playLines } from '../speech/directorVoice.js';
+import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 import { unlockAudio } from '../sfx.js';
 import { Logo } from '../components/Bits.jsx';
 
@@ -106,7 +106,8 @@ function Login({ onIn }) {
         <input
           className="title-input"
           type="password"
-          inputMode="numeric"
+          autoCapitalize="none"
+          autoCorrect="off"
           autoComplete="current-password"
           placeholder="Passcode"
           value={code}
@@ -408,6 +409,7 @@ function Studio({ status }) {
   const [voices, setVoices] = useState([]);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState(null);
+  const [voiceMsg, setVoiceMsg] = useState(null);
 
   useEffect(() => {
     parentApi.get('/api/parent/settings').then(setSettings);
@@ -424,8 +426,15 @@ function Studio({ status }) {
 
   const test = async () => {
     unlockAudio();
-    const line = await parentApi.post('/api/parent/voice-test', { voiceId: settings.directorVoiceId || status.defaultVoice });
-    playLines([line]);
+    primeDirectorAudio();
+    setVoiceMsg({ text: 'Testing…' });
+    try {
+      const line = await parentApi.post('/api/parent/voice-test', { voiceId: settings.directorVoiceId || status.defaultVoice });
+      setVoiceMsg(line.ok ? { ok: true, text: 'ElevenLabs is working ✓' } : { text: line.hint || 'ElevenLabs did not work, so the iPad voice was used.', detail: line.detail });
+      playLines([line]);
+    } catch (e) {
+      setVoiceMsg({ text: e.message });
+    }
   };
 
   return (
@@ -454,6 +463,12 @@ function Studio({ status }) {
             )}
           </label>
           {err && <div className="notice">{err}</div>}
+          {voiceMsg && (
+            <div className={voiceMsg.ok ? 'saved' : 'notice soft'}>
+              {voiceMsg.text}
+              {voiceMsg.detail && <div className="detail">{voiceMsg.detail}</div>}
+            </div>
+          )}
           <button className="btn small" onClick={test}>
             🔊 Test the voice
           </button>
