@@ -1,0 +1,16 @@
+modules = ["nodejs-20"]
+
+# What the big green "Run" button does in the Replit workspace.
+run = "npm install --no-audit --no-fund && npm run build && npm start"
+
+[nix]
+channel = "stable-24_05"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["sh", "-c", "npm install --no-audit --no-fund && npm run build"]
+run = ["npm", "start"]
