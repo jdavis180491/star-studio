@@ -6,6 +6,7 @@ import { loadCoins, saveCoins, logReading } from './store.js';
 
 export default function App() {
   const [briefs, setBriefs] = useState(null);
+  const [today, setToday] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [screen, setScreen] = useState('home');
   const [brief, setBrief] = useState(null);
@@ -17,6 +18,10 @@ export default function App() {
     fetch('/api/briefs/samples')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
       .then((d) => setBriefs(d.briefs))
+      .catch(() => setLoadError(true));
+    fetch('/api/briefs/today')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then((d) => setToday(d.brief))
       .catch(() => setLoadError(true));
   }, []);
 
@@ -63,5 +68,5 @@ export default function App() {
       />
     );
   }
-  return <Home briefs={briefs} loadError={loadError} coins={coins} onPick={startBrief} />;
+  return <Home today={today} briefs={briefs} loadError={loadError} coins={coins} onPick={startBrief} />;
 }

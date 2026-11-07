@@ -32,13 +32,13 @@ Phase 1 needs no keys. Later phases read these from Replit **Secrets** (the padl
 - Optional: in Safari, tap **Share → Add to Home Screen** so it opens like an app.
 
 ## Testing Phase 1
-- Pick a brief, tap the pink **Read it!** mic, and read aloud. Words turn gold as they're heard.
-- The bouncing pink dot shows the next word.
+- Tap **Start script read** for today’s challenge (or open **Test briefs** to pick another). Tap **START** and read aloud: words light up green, viewers climb, reactions fly.
+- The pink underline shows the next word. Filming unlocks only once the last sentence is read.
 - **Tap any word** for help. Help costs 2 coins, and it's free if you're out of coins or have already paid for that word.
-- The blue chips at the bottom are **star words** (keywords). Tap one that isn't done yet to practise it on its own. After 3 tries it counts anyway.
-- Filming unlocks at about **80%** of words read **and** all star words read.
+- The blue chips at the bottom are **unlock words** (keywords). Tap one that isn't done yet to practise it on its own. After 3 tries it counts anyway.
+- Filming unlocks at about **80%** of words read **and** all unlock words read, plus the last sentence.
 - **👂 button** (grown-ups): shows exactly what the iPad heard. This is useful if a word keeps not lighting up.
-- **Grown-up skip:** press and hold the 🔒 button for 2 seconds to unlock straight away.
+- **Grown-up skip:** press and hold the LOCKED button for 2 seconds to unlock straight away.
 
 ## For developers
 ```

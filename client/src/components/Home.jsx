@@ -1,7 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Logo, CoinPill } from './Bits.jsx';
 
-export default function Home({ briefs, loadError, coins, onPick }) {
+const dayLabel = () =>
+  new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
+
+export default function Home({ today, briefs, loadError, coins, onPick }) {
+  const [testOpen, setTestOpen] = useState(false);
+
   return (
     <div className="screen home">
       <header className="topbar">
@@ -10,31 +15,48 @@ export default function Home({ briefs, loadError, coins, onPick }) {
       </header>
 
       <main className="home-main">
-        <div className="home-hero">
-          <div className="on-air">
-            <span className="dot" /> TODAY'S CHALLENGE
-          </div>
-          <h1 className="hero-title">Pick your brief</h1>
-        </div>
-
         {loadError && <div className="notice">Can't reach the studio. Check the internet and refresh.</div>}
-        {!briefs && !loadError && <div className="loading">Loading…</div>}
 
-        <div className="brief-grid">
-          {briefs?.map((b, i) => (
-            <button
-              key={b.id}
-              className={`brief-card tilt-${i % 4} ${b.ageGroup === 'little' ? 'little' : ''}`}
-              onClick={() => onPick(b)}
-            >
-              <span className="brief-emoji" aria-hidden>
-                {b.emoji}
+        {today ? (
+          <button className="today" onClick={() => onPick(today)}>
+            <div className="today-top">
+              <span className="pill-live">
+                <span className="rec-dot" /> TODAY’S CHALLENGE
               </span>
-              <span className="brief-name">{b.title}</span>
-              {b.ageGroup === 'little' && <span className="tag">LITTLE STARS</span>}
-              <span className="brief-go">GO ➜</span>
-            </button>
-          ))}
+              <span className="today-date">{dayLabel()}</span>
+            </div>
+            <div className="today-title">{today.title}</div>
+            <div className="today-meta">
+              <span>
+                <b>{today.keywords.length}</b> unlock words
+              </span>
+              <span className="sep" />
+              <span>
+                <b>60s</b> to film
+              </span>
+              <span className="sep" />
+              <span>Same brief for the whole crew</span>
+            </div>
+            <div className="today-cta">START SCRIPT READ ➜</div>
+          </button>
+        ) : (
+          !loadError && <div className="today skeleton" />
+        )}
+
+        <div className="test-drawer">
+          <button className="test-toggle" onClick={() => setTestOpen((v) => !v)}>
+            {testOpen ? '▾' : '▸'} Test briefs
+          </button>
+          {testOpen && (
+            <div className="test-list">
+              {briefs?.map((b) => (
+                <button key={b.id} className="test-pill" onClick={() => onPick(b)}>
+                  {b.title}
+                  {b.ageGroup === 'little' && <em> · Little Stars</em>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </main>
     </div>

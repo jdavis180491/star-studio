@@ -27,6 +27,14 @@ app.get('/api/briefs/samples', (req, res) => {
   res.json({ briefs: sampleBriefs });
 });
 
+// One challenge per day: everyone in the group gets the same brief.
+// (Phase 2 replaces this with a Claude-written, parent-approved brief per group per day.)
+app.get('/api/briefs/today', (req, res) => {
+  const main = sampleBriefs.filter((b) => b.ageGroup === 'star');
+  const day = Math.floor(Date.now() / 86400000);
+  res.json({ brief: main[day % main.length], date: new Date().toISOString().slice(0, 10) });
+});
+
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });

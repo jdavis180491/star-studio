@@ -68,22 +68,22 @@ export default function KeywordSheet({ word, onDone, onClose }) {
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Say ${word}`}>
-        <div className="sheet-kicker">STAR WORD</div>
+        <div className="sheet-kicker">UNLOCK WORD</div>
         <div className={`sheet-word kw-big ${done ? 'got' : ''}`}>{word}</div>
         <div className="sheet-msg">
-          {state === 'yes' && '★ Nailed it! ★'}
-          {state === 'counted' && '★ Great try, that counts! ★'}
-          {state === 'listening' && 'Say it now…'}
-          {state === 'ready' && tries > 0 && 'Ooh, nearly! One more go.'}
+          {state === 'yes' && 'UNLOCKED'}
+          {state === 'counted' && 'GOOD TRY · UNLOCKED'}
+          {state === 'listening' && 'Say it…'}
+          {state === 'ready' && tries > 0 && 'So close. Again!'}
         </div>
         <div className="sheet-actions">
           {!done ? (
             <button className={`big-btn pink ${state === 'listening' ? 'pulse' : ''}`} onClick={listen}>
-              🎙️ Say it!
+              Say it
             </button>
           ) : (
             <button className="big-btn yellow" onClick={onClose}>
-              Back to reading ➜
+              Back to script ➜
             </button>
           )}
           {!done && (

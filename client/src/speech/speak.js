@@ -7,7 +7,11 @@ function pickVoice() {
   if (typeof speechSynthesis === 'undefined') return null;
   const voices = speechSynthesis.getVoices();
   if (!voices.length) return null;
+  const gb = voices.filter((v) => v.lang === 'en-GB');
+  // Prefer Apple's higher-quality voices if they are installed on the iPad.
   chosen =
+    gb.find((v) => /premium/i.test(v.name)) ||
+    gb.find((v) => /enhanced/i.test(v.name)) ||
     voices.find((v) => v.lang === 'en-GB' && /Daniel|Kate|Serena|Martha|Arthur|Stephanie/i.test(v.name)) ||
     voices.find((v) => v.lang === 'en-GB') ||
     voices.find((v) => v.lang?.startsWith('en')) ||
