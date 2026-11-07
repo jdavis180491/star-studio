@@ -12,6 +12,23 @@ export const voiceEnabled = () => Boolean(process.env.ELEVENLABS_API_KEY);
 const lines = new Map(); // id -> { text, voiceId, at }
 const audioCache = new Map(); // hash -> Buffer
 const MAX_LINES = 1000;
+let lastError = null;
+
+/** Turn an ElevenLabs error into a plain-English hint for the grown-ups page. */
+function explain(status, body) {
+  const b = body.toLowerCase();
+  if (b.includes('unusual_activity') || b.includes('unusual activity'))
+    return "ElevenLabs blocked this request. Its free plan often refuses requests from cloud servers like Replit's. The cheapest paid plan fixes this.";
+  if (b.includes('missing_permissions') || b.includes('permission'))
+    return 'The ElevenLabs key is missing a permission. Recreate it with Text to Speech: Access and Voices: Read.';
+  if (b.includes('quota') || b.includes('credits')) return 'Out of ElevenLabs credits for this month.';
+  if (b.includes('voice') && (status === 400 || status === 404 || b.includes('paid')))
+    return 'This voice is not available on your ElevenLabs plan. Pick another voice.';
+  if (status === 401) return 'ElevenLabs did not accept the key. Check ELEVENLABS_API_KEY in Replit Secrets (no spaces).';
+  return `ElevenLabs error ${status}.`;
+}
+
+export const voiceStatus = () => ({ enabled: voiceEnabled(), lastError });
 const MAX_AUDIO = 200;
 
 export function registerLine(text, voiceId) {
@@ -42,9 +59,12 @@ export async function lineAudio(id) {
     }),
   });
   if (!res.ok) {
-    console.warn('ElevenLabs error', res.status, (await res.text()).slice(0, 200));
-    return { status: 502 };
+    const body = (await res.text()).slice(0, 400);
+    console.warn('ElevenLabs error', res.status, body);
+    lastError = { status: res.status, hint: explain(res.status, body), detail: body.slice(0, 200), at: new Date().toISOString() };
+    return { status: 502, error: lastError };
   }
+  lastError = null;
   const audio = Buffer.from(await res.arrayBuffer());
   audioCache.set(key, audio);
   if (audioCache.size > MAX_AUDIO) audioCache.delete(audioCache.keys().next().value);
