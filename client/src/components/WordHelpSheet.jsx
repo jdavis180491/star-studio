@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { chunkWord, speakableChunk } from '../reading/phonics.js';
 import { speakSequence } from '../speech/speak.js';
-import { HELP_COST } from '../store.js';
+const HELP_COST = 2;
 
 export default function WordHelpSheet({ token, overrides, paid, coins, onPay, onClose }) {
   const word = token.display.replace(/[^A-Za-z0-9'’-]/g, '').replace(/-$/, '');

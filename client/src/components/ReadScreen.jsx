@@ -5,7 +5,10 @@ import { speak } from '../speech/speak.js';
 import { CoinPill, formatCount } from './Bits.jsx';
 import WordHelpSheet from './WordHelpSheet.jsx';
 import KeywordSheet from './KeywordSheet.jsx';
-import { HELP_COST } from '../store.js';
+import { api } from '../api.js';
+import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
+
+const HELP_COST = 2;
 import { unlockAudio, tick, keywordHit, greenlight, coin } from '../sfx.js';
 
 const HYPE_CALLS = [
@@ -25,7 +28,7 @@ function LockIcon({ open }) {
   );
 }
 
-export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) {
+export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked }) {
   const tracker = useMemo(() => new ReadingTracker(brief.text, brief.keywords), [brief]);
   const [snap, setSnap] = useState(() => tracker.snapshot());
   const [mic, setMic] = useState(speechSupported() ? 'idle' : 'unsupported');
@@ -49,6 +52,8 @@ export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) 
   const comboRef = useRef(0);
   const comboTimer = useRef(null);
   const isLittle = brief.ageGroup === 'little';
+  // Little Stars: the Director reads the brief first, then it's their turn.
+  const [listenFirst, setListenFirst] = useState(isLittle ? 'ask' : 'done'); // ask | playing | done
 
   const shout = useCallback((text) => {
     setCall({ text, id: Date.now() });
@@ -160,7 +165,7 @@ export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) 
   const payForHelp = (norm) => {
     if (paidWords.has(norm)) return true;
     if (coins >= HELP_COST) {
-      spend(HELP_COST);
+      onHelp?.(norm);
       coin();
       setCoinBump(true);
       setTimeout(() => setCoinBump(false), 600);
@@ -198,6 +203,7 @@ export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) 
       helpedWords: [...paidWords],
       keywords: snap.keywords.map((k) => k.word),
       keywordsRead: snap.keywords.filter((k) => k.done).map((k) => k.word),
+      keywordsForced: [...tracker.forced],
       grownUpSkip: grownUpSkip && !snap.unlocked,
       peakViewers: viewers,
       bestCombo,
@@ -205,9 +211,20 @@ export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) 
     });
   };
 
-  const hearBrief = () => {
+  const hearBrief = async () => {
+    unlockAudio();
+    primeDirectorAudio();
     pauseForSheet();
-    speak(brief.text, { rate: 0.8 });
+    setListenFirst('playing');
+    try {
+      const track = brief.track || (isLittle ? 'little' : 'star');
+      const { line } = brief.source === 'sample' ? { line: null } : await api.post('/api/kid/director/read-brief', { track });
+      if (line) await playLines([line]);
+      else await speak(brief.text, { rate: 0.8 });
+    } catch {
+      await speak(brief.text, { rate: 0.8 });
+    }
+    setListenFirst('done');
   };
 
   const pct = Math.round(snap.progress * 100);
@@ -282,7 +299,7 @@ export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) 
               );
             })}
           </p>
-          {isLittle && (
+          {isLittle && listenFirst === 'done' && (
             <button className="hear-btn" onClick={hearBrief}>
               🔊 Hear it first
             </button>
@@ -297,6 +314,15 @@ export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) 
         </div>
         {showHeard && <div className="heard">{snap.heard || '…'}</div>}
       </main>
+
+      {isLittle && listenFirst !== 'done' && (
+        <div className="listen-first">
+          <button className="listen-btn" onClick={hearBrief} disabled={listenFirst === 'playing'}>
+            <span className="listen-icon">{listenFirst === 'playing' ? '🎬' : '🔊'}</span>
+            {listenFirst === 'playing' ? 'Listen…' : 'Listen first'}
+          </button>
+        </div>
+      )}
 
       <footer className="dock">
         <div className="dock-left">
@@ -361,7 +387,7 @@ export default function ReadScreen({ brief, coins, spend, onBack, onUnlocked }) 
       </footer>
 
       {call && (
-        <div key={call.id} className="call">
+        <div key={call.id} className="hype-call">
           {call.text}
         </div>
       )}
