@@ -17,16 +17,15 @@ Decisions agreed with the owner, so they survive between build phases.
 - Unlock needs about 80% of the words, every keyword, **and** the last sentence read, so it never finishes mid-read.
 
 ## Phases
+All seven phases are built (pending real-iPad testing):
 1. Brief + read-aloud check + word help ✅
-2. Claude brief generation + parent keywords + phonics word bank + word moment ✅
-3. Director chat (ElevenLabs voice) + filming ✅
-4. Auto-edit pipeline with ffmpeg
-5. Accounts, PIN login, followers, coins, avatar studio, trophies
-6. Friend groups, approvals, premieres, awards, league table, **one-per-day + tomorrow's pick**
-7. Little Stars mode + parent dashboard stats
+2. Claude briefs + parent keywords + phonics word bank + word moment ✅
+3. Director (now a real voice call) + filming (now a live effects camera) ✅
+4. Auto-edit with ffmpeg: intro, captions, effect hits, ducked music, sing-along lyrics, one remix ✅
+5. Parent accounts, kid avatar + PIN login, followers, coins, shop, avatar studio, trophies, streak ✅
+6. Crews (invite codes), parent approvals, premieres, sticker reactions, awards, league, Premiere Night ✅
+7. Little Stars mode (Director reads first, bigger UI) + reading stats + data deletion ✅
 
-## Notes for later phases
-- The parent dashboard is protected by a single passcode (PARENT_PASSCODE) until Phase 5 adds proper parent accounts.
-- Briefs and settings are stored for one family; Phase 6 adds a group id so each friend group has its own daily brief.
-- Takes stay on the iPad for now; Phase 4 uploads them to Replit Object Storage for the ffmpeg edit.
-- The ending answer and mood/music choices are saved in the edit plan and used by the Phase 4 auto-edit.
+## Next ideas
+- "Tomorrow's pick": one child chooses tomorrow's theme the night before (the brief already takes a theme).
+- Whisper speech recognition for reading, if Safari struggles with the kids' voices.

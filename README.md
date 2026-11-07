@@ -1,91 +1,73 @@
 # ⭐ Star Studio
 
 A private daily video-challenge game for children aged 5–9, played on an iPad in Safari.
-Kids read a funny brief aloud to unlock filming, chat with a voiced AI Director, then film their take.
-Under the hood, it's reading practice.
+It feels like being a creator; underneath, it's reading practice.
 
-**Current build: Phases 1–3.**
-- Read-aloud script with word help
-- Briefs written by Claude using your keywords, plus a phonics word bank
-- A word moment (spell a word from tiles, or name the video)
-- A voiced Director chat
-- Filming with the iPad camera
+**A day in the studio:**
+1. **Read the script.** The brief uses this week's spelling words, and the words light up as the child reads aloud.
+2. **Word moment.** Spell an unlock word from tiles to win an effect, or name the video using an unlock word.
+3. **Director call.** A voice call with the Director (no subtitles, no menus) to plan the mood, the music, the big ending and any effects.
+4. **Studio camera.** Live weather, backdrops (the child is cut out, like a green screen), colour looks, TV frames, stickers and music.
+5. **Edit suite.** The server adds an intro, captions, effect hits, ducked music and a sing-along lyric card. There's one remix.
+6. **Post.** The child earns followers (with a 1-in-6 chance of a viral hit), then a grown-up approves the video.
+7. **Premiere.** The crew's videos are revealed together once everyone has posted, or at 6pm.
+8. **Afterwards.** Sticker reactions, one award per child per day, a weekly league, and Friday Premiere Night.
 
-The auto-edit (music, captions, effects) comes in Phase 4.
+There's also a studio with an avatar, a shop, decor and a trophy shelf, plus a Little Stars mode for younger children and a grown-ups dashboard (kids, approvals, briefs, keywords, crews, reading stats, deleting data).
 
 ---
 
-## Running it on Replit (from GitHub)
+## Replit setup
 
-### First time
-1. Go to **replit.com** and sign in with GitHub.
-2. Tap **Create App** → **Import from GitHub** → pick `star-studio` → **Import**.
-3. Leave everything as imported. Don't let Replit's AI "set up" the project.
-4. Tap **Run**. The first run takes 1–2 minutes.
-5. Open the `.replit.dev` web address **in Safari on the iPad**. The microphone and camera don't work inside Replit's own preview.
-
-### Getting new versions
-Open the **Git** panel → **Pull**, then tap **Run** again, then refresh Safari.
-
-### Secrets (the padlock icon, "Secrets")
-Add each one with **+ New Secret**: type the name exactly as shown, paste the value, then tap **Add Secret**.
-
-| Name | What it is | Needed for |
+### Secrets (Tools → Secrets)
+| Name | What to put | Needed? |
 |---|---|---|
-| `PARENT_PASSCODE` | Any passcode you choose, e.g. 6 digits | The grown-ups dashboard |
-| `ANTHROPIC_API_KEY` | From console.anthropic.com → API Keys | Claude writing briefs and the Director's replies |
-| `ELEVENLABS_API_KEY` | From elevenlabs.io → your profile → API Keys | The Director's voice |
-| `DATABASE_URL` | Added **automatically** when you add a database (below) | Saving keywords and briefs |
-| `SESSION_SECRET` | Not needed yet (Phase 5) | Kids' logins |
-| `OPENAI_API_KEY` | Optional, not needed yet | A future upgrade to speech recognition |
+| `SESSION_SECRET` | Any long random text (mash the keyboard, 40+ characters) | **Yes**: keeps logins and video links safe |
+| `DATABASE_URL` | Added automatically when you create the PostgreSQL database | **Yes** |
+| `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys | For Claude briefs, the Director and the edits |
+| `ELEVENLABS_API_KEY` | elevenlabs.io → API Keys (needs a paid plan from Replit's servers) | For the Director's voice |
+| `OPENAI_API_KEY` | platform.openai.com → API Keys | Optional: rewards unlock words said on camera, and times captions to speech |
 
-After adding or changing secrets, tap **Stop** and then **Run**.
+`PARENT_PASSCODE` is no longer used (each parent has their own account now). You can delete it.
 
-### Database
-In Replit, open the **Database** tool (search "Database" in the tools list) and create a **PostgreSQL** database.
-Replit adds `DATABASE_URL` for you. Then Stop and Run. Without a database the app still runs, but saved
-briefs and keywords may be lost when Replit restarts.
+### App Storage (for videos)
+In Replit, open **Object Storage / App Storage** and create a bucket. Videos are then stored privately and survive restarts.
+Without it, videos are kept on the server's temporary disk and can disappear.
+
+### Publishing
+Use **Reserved VM**, or set Autoscale's **maximum machines to 1**. Video editing runs in the background on the server, so one always-on machine works best.
+
+### Getting updates
+Paste this into Replit's AI chat:
+```
+Run these shell commands and nothing else: git fetch origin, then git reset --hard origin/main. Do not edit any files. Then restart the app (npm install, npm run build, npm start) and republish. Show me git log --oneline -1, then stop.
+```
 
 ---
-
-## iPad setup (one time)
-- **Settings → General → Keyboard → Enable Dictation: ON.** Safari's speech recognition uses this.
-- When Safari asks for the **microphone**, **speech recognition** and **camera**, tap **Allow**.
-- If you tapped "Don't Allow" by mistake, go to **Settings → Apps → Safari → Camera / Microphone** and set it to **Ask** or **Allow**.
-- Optional: **Settings → Accessibility → Spoken Content → Voices → English (UK)**: download an *Enhanced* voice for nicer word help.
-
-## How a day works
-1. **Grown-ups** (`/parent`, or the small "Grown-ups" link on the home screen):
-   - Add this week's spelling words, or use **Suggest from word bank**.
-   - Under **Daily briefs**, tap **Write with Claude**, check the result, then **Approve for the kids**. You can do tomorrow's the night before.
-   - Under **Studio**, set the channel name and choose the Director's voice.
-2. **Kids** tap **Start script read**. They read aloud and the words light up.
-3. Filming unlocks at about 80% of the words, all the unlock words and the last sentence.
-4. **Word moment**: spell a word from tiles to unlock an effect, or type a video title that uses an unlock word.
-5. **Director's chair**: the Director asks about mood, music and the big ending. Kids answer by voice, or tap a choice.
-6. **Camera**: a 3-2-1 countdown, up to 60 seconds, with as many retakes as they like.
-
-Until you approve a brief for the day, kids get a built-in practice brief.
-
-### Grown-up tricks
-- **👂** on the reading screen shows what the iPad heard.
-- Press and hold **LOCKED** for 2 seconds to skip the reading check.
-
-## Privacy so far
-- The AI services only ever see the **channel name**, never children's names.
-- The Director's voice can only speak lines the server wrote itself, so nobody else can use your ElevenLabs key.
-- Videos stay on the iPad until Phase 4 adds private storage.
 
 ## For developers
 ```
 npm install
-npm run build && npm start   # http://localhost:3000
-npm test
+npm run build && npm start      # needs DATABASE_URL
+npm test                        # unit tests
+TEST_DATABASE_URL=postgres://… npm test   # + full API walkthrough (two families, crew, video edit)
+node scripts/make-music.mjs     # regenerate the original music loops
 ```
-- `client/src/reading/`: the forgiving word matcher and the phonics chunker
-- `client/src/speech/recognizer.js`: the speech interface (the browser engine today, Whisper-ready)
-- `server/ai/claude.js`: Claude (`claude-sonnet-5-5`) structured-output calls
-- `server/ai/voice.js`: ElevenLabs
-- `server/store/`: Postgres (or a JSON file when there's no `DATABASE_URL`)
-- `server/data/wordBank.js`: Reception to Year 6 starter word bank
-- `docs/ROADMAP.md`: decisions and phases
+| Area | Where |
+|---|---|
+| Reading tracker, phonics | `client/src/reading/` |
+| Speech (browser engine today, swappable for Whisper) | `client/src/speech/recognizer.js` |
+| Director call | `client/src/components/DirectorCall.jsx`, `server/ai/director.js`, `server/ai/claude.js` |
+| Live camera effects | `client/src/camera/` (effects, on-device segmentation, recorder) |
+| Auto-edit | `server/media/render.js` (ffmpeg), `server/media/graphics.js` (cards & captions) |
+| Accounts & sessions | `server/auth.js`, `server/routes/auth.js` |
+| Rewards, shop, trophies | `server/lib/rewards.js`, `server/lib/catalog.js` |
+| Crews, premieres | `server/lib/family.js`, `server/lib/videos.js`, `server/routes/kid.js` |
+| Grown-ups dashboard | `client/src/parent/ParentApp.jsx`, `server/routes/parent.js` |
+| Database schema | `server/db.js` (migrations run on start) |
+
+**Privacy:**
+- AI services only ever see the channel name, never real names.
+- Videos are private. They're streamed only with short-lived signed links, to the child's own family, and to crew-mates after the premiere.
+- No free-text messaging between children: reactions are a fixed set of stickers.
+- Parents can delete any video, any child, or the whole account.
