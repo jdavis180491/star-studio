@@ -106,7 +106,8 @@ function Login({ onIn }) {
         <input
           className="title-input"
           type="password"
-          inputMode="numeric"
+          autoCapitalize="none"
+          autoCorrect="off"
           autoComplete="current-password"
           placeholder="Passcode"
           value={code}
