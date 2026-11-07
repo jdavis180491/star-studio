@@ -5,6 +5,8 @@ const dayLabel = () =>
   new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
 
 export default function Home({ today, briefs, loadError, coins, onPick }) {
+  const brief = today?.brief;
+  const little = today?.little;
   const [testOpen, setTestOpen] = useState(false);
 
   return (
@@ -17,18 +19,19 @@ export default function Home({ today, briefs, loadError, coins, onPick }) {
       <main className="home-main">
         {loadError && <div className="notice">Can't reach the studio. Check the internet and refresh.</div>}
 
-        {today ? (
-          <button className="today" onClick={() => onPick(today)}>
+        {brief ? (
+          <button className="today" onClick={() => onPick(brief)}>
             <div className="today-top">
               <span className="pill-live">
                 <span className="rec-dot" /> TODAY’S CHALLENGE
               </span>
               <span className="today-date">{dayLabel()}</span>
             </div>
-            <div className="today-title">{today.title}</div>
+            <div className="today-channel">{today.channelName}</div>
+            <div className="today-title">{brief.title}</div>
             <div className="today-meta">
               <span>
-                <b>{today.keywords.length}</b> unlock words
+                <b>{brief.keywords.length}</b> unlock words
               </span>
               <span className="sep" />
               <span>
@@ -41,6 +44,19 @@ export default function Home({ today, briefs, loadError, coins, onPick }) {
           </button>
         ) : (
           !loadError && <div className="today skeleton" />
+        )}
+
+        {little && (
+          <button className="little-card" onClick={() => onPick(little)}>
+            <span className="little-emoji" aria-hidden>
+              {little.emoji}
+            </span>
+            <span className="little-text">
+              <small>LITTLE STARS · TODAY</small>
+              {little.title}
+            </span>
+            <span className="little-go">GO</span>
+          </button>
         )}
 
         <div className="test-drawer">
@@ -57,6 +73,9 @@ export default function Home({ today, briefs, loadError, coins, onPick }) {
               ))}
             </div>
           )}
+          <a className="grownups" href="/parent">
+            Grown-ups
+          </a>
         </div>
       </main>
     </div>

@@ -1,4 +1,4 @@
-modules = ["nodejs-20"]
+modules = ["nodejs-20", "postgresql-16"]
 
 # What the big green "Run" button does in the Replit workspace.
 run = "npm install --no-audit --no-fund && npm run build && npm start"

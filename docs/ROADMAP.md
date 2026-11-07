@@ -18,9 +18,15 @@ Decisions agreed with the owner, so they survive between build phases.
 
 ## Phases
 1. Brief + read-aloud check + word help ✅
-2. Claude brief generation + parent keywords + phonics word bank + word moment
-3. Director chat (ElevenLabs voice) + filming
+2. Claude brief generation + parent keywords + phonics word bank + word moment ✅
+3. Director chat (ElevenLabs voice) + filming ✅
 4. Auto-edit pipeline with ffmpeg
 5. Accounts, PIN login, followers, coins, avatar studio, trophies
 6. Friend groups, approvals, premieres, awards, league table, **one-per-day + tomorrow's pick**
 7. Little Stars mode + parent dashboard stats
+
+## Notes for later phases
+- The parent dashboard is protected by a single passcode (PARENT_PASSCODE) until Phase 5 adds proper parent accounts.
+- Briefs and settings are stored for one family; Phase 6 adds a group id so each friend group has its own daily brief.
+- Takes stay on the iPad for now; Phase 4 uploads them to Replit Object Storage for the ffmpeg edit.
+- The ending answer and mood/music choices are saved in the edit plan and used by the Phase 4 auto-edit.

@@ -10,6 +10,11 @@ export function unlockAudio() {
   }
 }
 
+/** The shared, unlocked AudioContext (or null before the first tap). */
+export function getAudioCtx() {
+  return ctx;
+}
+
 function tone({ freq = 600, to = freq, dur = 0.08, type = 'sine', vol = 0.08, delay = 0 }) {
   if (!ctx) return;
   const t = ctx.currentTime + delay;
@@ -46,4 +51,12 @@ export function greenlight() {
 export function coin() {
   tone({ freq: 988, dur: 0.06, type: 'square', vol: 0.05 });
   tone({ freq: 1319, dur: 0.16, type: 'square', vol: 0.05, delay: 0.06 });
+}
+
+export function wrong() {
+  tone({ freq: 220, to: 160, dur: 0.18, type: 'square', vol: 0.04 });
+}
+
+export function countdownBeep(last = false) {
+  tone({ freq: last ? 1046 : 660, dur: last ? 0.35 : 0.12, type: 'triangle', vol: 0.09 });
 }
