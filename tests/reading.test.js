@@ -110,3 +110,14 @@ test('phonics chunks', () => {
   };
   for (const [w, want] of Object.entries(cases)) assert.deepEqual(chunkWord(w), want, w);
 });
+
+test('does not unlock before the last sentence is read', () => {
+  const t = new ReadingTracker(sock.text, sock.keywords);
+  // Everything except the final sentence: well over 80% of words, all keywords.
+  t.ingest(1, 'Breaking news! A sneaky monster has stolen every left sock in your house. You must whisper a secret plan to catch it, because monsters have super ears. Show us your best sneaky tiptoe.');
+  const s = t.snapshot();
+  assert.ok(s.progress >= 0.75, `progress ${s.progress}`);
+  assert.equal(s.unlocked, false);
+  t.ingest(2, 'then shout your big monster move');
+  assert.ok(t.snapshot().unlocked);
+});

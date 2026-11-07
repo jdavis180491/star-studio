@@ -30,6 +30,7 @@ export default function WordHelpSheet({ token, overrides, paid, coins, onPay, on
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Help with ${word}`}>
+        <div className="sheet-kicker">WORD ASSIST</div>
         <div className="sheet-word">
           {revealed ? (
             chunks.map((c, i) => (
@@ -45,22 +46,22 @@ export default function WordHelpSheet({ token, overrides, paid, coins, onPay, on
         <div className="sheet-actions">
           {!revealed ? (
             <button className="big-btn pink" onClick={help}>
-              Help me!{' '}
+              Break it down{' '}
               {free ? (
                 <span className="price">FREE</span>
               ) : (
                 <span className="price">
-                  <span className="coin">●</span> {HELP_COST}
+                  <span className="coin" /> {HELP_COST}
                 </span>
               )}
             </button>
           ) : (
             <button className="big-btn pink" onClick={play}>
-              🔊 Again
+              🔊 Replay
             </button>
           )}
           <button className="big-btn ghost" onClick={onClose}>
-            Got it ✓
+            Got it
           </button>
         </div>
       </div>

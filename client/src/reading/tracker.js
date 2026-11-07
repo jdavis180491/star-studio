@@ -30,6 +30,21 @@ export class ReadingTracker {
     this.sessionKey = null;
     this.sessionStart = 0;
     this.heard = '';
+    // The last sentence must be read too, so filming never unlocks mid-read.
+    let start = 0;
+    for (let i = 0; i < this.tokens.length - 1; i++) {
+      if (/[.!?]["'’”)]*$/.test(this.tokens[i].display)) start = i + 1;
+    }
+    this.lastSentence = this.tokens.slice(start).map((t) => t.index);
+  }
+
+  endReached() {
+    const idx = this.lastSentence;
+    if (!idx.length) return true;
+    const read = idx.filter((i) => this.status[i] === 'read').length;
+    const done = idx.filter((i) => this.status[i] !== 'unread').length;
+    // Final word, or most of the last sentence, must have been heard.
+    return read > 0 && (this.status[idx[idx.length - 1]] === 'read' || done / idx.length >= 0.6);
   }
 
   /** Feed the full transcript of a listening session. Returns indices newly lit. */
@@ -157,7 +172,8 @@ export class ReadingTracker {
       total: this.tokens.length,
       keywords,
       nextIndex: this.nextIndex(),
-      unlocked: progress >= UNLOCK_RATIO && keywords.every((k) => k.done),
+      endReached: this.endReached(),
+      unlocked: progress >= UNLOCK_RATIO && keywords.every((k) => k.done) && this.endReached(),
       heard: this.heard,
     };
   }
