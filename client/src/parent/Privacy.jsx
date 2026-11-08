@@ -90,13 +90,19 @@ export function PrivacyDoc() {
         nothing about your child.
       </p>
 
-      <h3>9. Deleting your data</h3>
+      <h3>9. Phone notifications (optional)</h3>
+      <p>
+        If you turn on phone notifications, short messages such as “Ann earned a Dibbly Dob” or “A video is ready to approve” are sent to your phone
+        through Apple’s or Google’s notification service. They are encrypted, so that service can’t read them. You can turn them off at any time.
+      </p>
+
+      <h3>10. Deleting your data</h3>
       <ul>
         <li>You can delete any video, any child’s profile or your whole account from the grown-ups’ area at any time.</li>
         <li>Deleting a child removes all their videos, stories, results and Dobs. Deleting your account removes everything belonging to your family.</li>
       </ul>
 
-      <h3>10. Changes and questions</h3>
+      <h3>11. Changes and questions</h3>
       <p>
         If these terms change in a way that matters, we’ll ask you to read and accept them again. If you have a question about your family’s data,
         contact the person who invited you to Dibbly Dobs.

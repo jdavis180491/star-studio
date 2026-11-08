@@ -9,7 +9,7 @@ import KeywordSheet from './KeywordSheet.jsx';
 import { api } from '../api.js';
 import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 
-import { unlockAudio, tick, keywordHit, greenlight, coin } from '../sfx.js';
+import { unlockAudio, tick, keywordHit, greenlight } from '../sfx.js';
 
 const HYPE_CALLS = [
   [0.3, 'CHAT IS WAKING UP'],
@@ -28,7 +28,7 @@ function LockIcon({ open }) {
   );
 }
 
-export default function ReadScreen({ brief, coins = 0, helpCost = 0, onHelp, onBack, onUnlocked, mode = 'script' }) {
+export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode = 'script' }) {
   const isStory = mode === 'story';
   const tracker = useMemo(() => new ReadingTracker(brief.text, brief.keywords), [brief]);
   const [snap, setSnap] = useState(() => tracker.snapshot());
@@ -40,7 +40,6 @@ export default function ReadScreen({ brief, coins = 0, helpCost = 0, onHelp, onB
   const [showHeard, setShowHeard] = useState(false);
   const [greenlit, setGreenlit] = useState(false);
   const [grownUpSkip, setGrownUpSkip] = useState(false);
-  const [coinBump, setCoinBump] = useState(false);
   const [viewers, setViewers] = useState(0);
   const [combo, setCombo] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
@@ -163,18 +162,8 @@ export default function ReadScreen({ brief, coins = 0, helpCost = 0, onHelp, onB
     setHelpIndex(i);
   };
 
-  const payForHelp = (norm) => {
-    if (paidWords.has(norm)) return true;
-    if (helpCost > 0 && coins >= helpCost) {
-      onHelp?.(norm);
-      coin();
-      setCoinBump(true);
-      setTimeout(() => setCoinBump(false), 600);
-    }
-    // Can't afford it? Help is free. We never block a child from help.
-    setPaidWords((s) => new Set(s).add(norm));
-    return true;
-  };
+  // Word help is always free.
+  const markHelped = (norm) => setPaidWords((s) => new Set(s).add(norm));
 
   const openKeyword = (word) => {
     unlockAudio();
@@ -259,7 +248,7 @@ export default function ReadScreen({ brief, coins = 0, helpCost = 0, onHelp, onB
           >
             👂
           </button>
-          <DobPill dobs={coins} bump={coinBump} />
+          <DobPill dobs={coins} />
         </div>
       </header>
 
@@ -412,9 +401,7 @@ export default function ReadScreen({ brief, coins = 0, helpCost = 0, onHelp, onB
           token={tracker.tokens[helpIndex]}
           overrides={brief.chunks}
           paid={paidWords.has(tracker.tokens[helpIndex].norm)}
-          coins={coins}
-          helpCost={helpCost}
-          onPay={payForHelp}
+          onHelp={markHelped}
           onClose={() => {
             setHelpIndex(null);
             resumeAfterSheet();

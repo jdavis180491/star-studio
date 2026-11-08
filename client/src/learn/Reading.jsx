@@ -73,8 +73,6 @@ export default function Reading({ kid, rules, onBack, onKid }) {
         mode="story"
         brief={brief}
         coins={kid.dobs}
-        helpCost={rules?.helpCost || 0}
-        onHelp={(word) => api.post('/api/kid/help', { word }).then((r) => onKid({ ...kid, dobs: r.dobs })).catch(() => {})}
         onBack={() => setPhase('home')}
         onUnlocked={afterRead}
       />

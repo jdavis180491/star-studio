@@ -3,33 +3,23 @@
 import { tx, one, many } from '../db.js';
 import { TROPHIES } from './catalog.js';
 import { dayISO, addDays, weekStartISO } from './dates.js';
+import { later, notifyDob } from './notify.js';
 
-// What each activity is worth. Grown-ups change these in the portal ("Dob values").
+// What each activity is worth: one Dob each, the same for every family so it's fair.
 export const DOB_ACTIVITIES = [
-  { id: 'studio', name: 'Star Studio video posted', hint: 'once a day', def: 3 },
-  { id: 'reading', name: 'Story read aloud', hint: 'every time', def: 2 },
-  { id: 'writing', name: 'Story or letter written', hint: 'every time', def: 2 },
-  { id: 'continue', name: 'Continued a friend’s story', hint: 'every time', def: 1 },
-  { id: 'spelling', name: 'Spelling set (5 words)', hint: 'every time', def: 1 },
-  { id: 'maths-addition', name: 'Maths: addition (5 questions)', hint: 'every time', def: 1 },
-  { id: 'maths-subtraction', name: 'Maths: subtraction (5 questions)', hint: 'every time', def: 1 },
-  { id: 'maths-bonds', name: 'Maths: number bonds (5 questions)', hint: 'every time', def: 1 },
-  { id: 'maths-times', name: 'Maths: times tables (5 questions)', hint: 'every time', def: 1 },
+  { id: 'studio', name: 'Star Studio video posted', hint: 'once a day' },
+  { id: 'reading', name: 'Story read aloud', hint: 'every time' },
+  { id: 'writing', name: 'Story or letter written', hint: 'every time' },
+  { id: 'continue', name: 'Continued a friend’s story', hint: 'every time' },
+  { id: 'spelling', name: 'Spelling set (5 words)', hint: 'every time' },
+  { id: 'maths-addition', name: 'Maths: addition (5 questions)', hint: 'every time' },
+  { id: 'maths-subtraction', name: 'Maths: subtraction (5 questions)', hint: 'every time' },
+  { id: 'maths-bonds', name: 'Maths: number bonds (5 questions)', hint: 'every time' },
+  { id: 'maths-times', name: 'Maths: times tables (5 questions)', hint: 'every time' },
 ];
-export const DEFAULT_RULES = { ...Object.fromEntries(DOB_ACTIVITIES.map((a) => [a.id, a.def])), helpCost: 0 };
+export const DOB_VALUES = Object.freeze(Object.fromEntries(DOB_ACTIVITIES.map((a) => [a.id, 1])));
 
-export function dobRules(familySettings = {}) {
-  const r = { ...DEFAULT_RULES, ...(familySettings.dobRules || {}) };
-  for (const k of Object.keys(r)) r[k] = Math.max(0, Math.min(50, Math.round(Number(r[k]) || 0)));
-  return r;
-}
-
-export async function rulesForKid(kidId) {
-  const f = await one(`SELECT f.settings FROM families f JOIN kids k ON k.family_id = f.id WHERE k.id = $1`, [kidId]);
-  return dobRules(f?.settings || {});
-}
-
-// Star Studio extras, in Dobs (on top of the grown-up's value for posting).
+// Star Studio extras, in Dobs (on top of the 1 Dob for posting).
 export const BONUS = {
   keyword: 1, // each unlock word said on camera (max 3)
   award: 1, // receiving an award from a crew friend
@@ -40,7 +30,7 @@ export const VIRAL_CHANCE = 1 / 6; // viral hit = double Dobs for that video
  * Record an event and add (or take away) Dobs inside a transaction.
  * `meta` says what they did (shown to grown-ups). Returns the new totals.
  */
-export async function grant(client, kidId, type, { dobs = 0, meta = {}, note = null, byParent = false } = {}) {
+export async function grant(client, kidId, type, { dobs = 0, meta = {}, note = null, byParent = false, quiet = false } = {}) {
   const before = (await client.query(`SELECT dobs_earned FROM kids WHERE id = $1 FOR UPDATE`, [kidId])).rows[0];
   if (!before) throw new Error('kid not found');
   await client.query(
@@ -53,15 +43,16 @@ export async function grant(client, kidId, type, { dobs = 0, meta = {}, note = n
       [kidId, dobs]
     )
   ).rows[0];
+  // Tell the grown-ups' phones (not for their own adjustments, or when another notification already says it).
+  if (dobs > 0 && !byParent && !quiet) later(() => notifyDob(kidId, dobs, meta.what));
   const newTrophies = TROPHIES.filter((t) => before.dobs_earned < t.at && after.dobs_earned >= t.at).map((t) => t.id);
   return { dobs: after.dobs, gained: { dobs }, newTrophies };
 }
 
-/** Give the Dobs a grown-up set for this activity. */
-export async function earnDobs(kidId, activity, meta = {}) {
-  const rules = await rulesForKid(kidId);
-  const dobs = rules[activity] ?? 0;
-  return tx((c) => grant(c, kidId, activity, { dobs, meta }));
+/** Give the Dob for finishing an activity. */
+export async function earnDobs(kidId, activity, meta = {}, { quiet = false } = {}) {
+  const dobs = DOB_VALUES[activity] ?? 0;
+  return tx((c) => grant(c, kidId, activity, { dobs, meta, quiet }));
 }
 
 export async function alreadyToday(kidId, type) {
