@@ -6,7 +6,7 @@ import {
 import { publicKid } from '../lib/family.js';
 import { rateLimit } from '../lib/rateLimit.js';
 
-const CONSENT_VERSION = 2;
+const CONSENT_VERSION = 3; // 3: children's voices are heard by ElevenLabs
 
 export function authRouter() {
   const r = express.Router();

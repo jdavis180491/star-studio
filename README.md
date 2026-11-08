@@ -24,7 +24,7 @@ Also: a Dibbly Dobs leaderboard (family and crew, resets Monday), trophies at 50
 | `SESSION_SECRET` | Any long random text (mash the keyboard, 40+ characters) | **Yes**: keeps logins and video links safe |
 | `DATABASE_URL` | Added automatically when you create the PostgreSQL database | **Yes** |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys | For Story Buddy, stories, spell check, spelling sentences, Star Studio briefs, the Director and the edits |
-| `ELEVENLABS_API_KEY` | elevenlabs.io → API Keys (needs a paid plan from Replit's servers) | For the Director, Story Buddy and spelling voice |
+| `ELEVENLABS_API_KEY` | elevenlabs.io → API Keys (needs a paid plan from Replit's servers). The key needs **Text to Speech** and **Speech to Text** switched on | The app's voice, and **hearing the children** (live speech-to-text). Grown-ups → Settings → *Test listening* checks it |
 | `OPENAI_API_KEY` | platform.openai.com → API Keys | Optional: rewards unlock words said on camera, and times captions to speech |
 | `OBJECT_STORAGE_BUCKET_ID` | The Bucket ID from Replit's App Storage | **Yes** for videos to be kept |
 | `ADMIN_EMAILS` | The email(s) of the app's admin(s), separated by commas | Shows the **Daily briefs** tab to those accounts only |

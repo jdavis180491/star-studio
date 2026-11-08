@@ -7,6 +7,7 @@ import { upcomingBriefs, setAdminBriefs, clearBriefs, recentTitles } from '../li
 import { cleanWords, windowProblem, wordsForKid, setsFor, COHORTS, WORDS_PER_DAY } from '../lib/keywords.js';
 import { isAdminEmail } from '../lib/admin.js';
 import { cleanLevels } from '../lib/levels.js';
+import { sttEnabled, sttToken, STT_CONSENT_VERSION } from '../ai/stt.js';
 import { familySettings, familyManagesScope, scopeMembers, randomCode } from '../lib/family.js';
 import { wordsFor, pickWords, YEAR_GROUPS, YEAR_LABELS } from '../data/wordBank.js';
 import { claudeEnabled, generateBrief, generateLittleFromMain, briefProblems, MODEL } from '../ai/claude.js';
@@ -45,9 +46,11 @@ export function parentRouter() {
 
   r.get('/status', async (req, res, next) => {
     try {
-      const f = await one(`SELECT email FROM families WHERE id = $1`, [fam(req)]);
+      const f = await one(`SELECT email, settings FROM families WHERE id = $1`, [fam(req)]);
       res.json({
         email: f.email,
+        listening: sttEnabled() ? 'elevenlabs' : 'device',
+        consentNeeded: (f.settings?.consentVersion || 1) < STT_CONSENT_VERSION,
         claude: claudeEnabled(),
         model: MODEL,
         voice: voiceEnabled(),
@@ -137,6 +140,27 @@ export function parentRouter() {
       res.json({ ok: true, deletedVideos: vids.length });
     } catch (e) {
       next(e);
+    }
+  });
+
+  // ------------------------------------------------------------- updated Terms & hearing test
+  r.post('/consent', async (req, res, next) => {
+    try {
+      await q(`UPDATE families SET settings = settings || $2::jsonb, consent_at = now() WHERE id = $1`, [fam(req), JSON.stringify({ consentVersion: STT_CONSENT_VERSION })]);
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Can the app use ElevenLabs to hear the children? (asks ElevenLabs for a test token)
+  r.post('/listen-test', rateLimit({ perMinute: 6 }), async (req, res, next) => {
+    try {
+      if (!sttEnabled()) return res.json({ ok: false, hint: 'Add ELEVENLABS_API_KEY in Replit Secrets first.' });
+      await sttToken();
+      res.json({ ok: true });
+    } catch (e) {
+      res.json({ ok: false, hint: e.message, detail: e.detail || null });
     }
   });
 

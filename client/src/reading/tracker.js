@@ -67,10 +67,39 @@ export class ReadingTracker {
     this.heard = transcript;
     const words = spokenWords(transcript);
     const before = this.status.slice();
-    let cursor = this._skipDone(this.sessionStart);
+    // Start where this session started, so words already read in it line up again.
+    let cursor = this.sessionStart;
     let stuck = null;
     let k = 0;
+    const same = (i, word) =>
+      i < this.tokens.length &&
+      (this.tokens[i].filler ? wordsMatch(this.tokens[i].norm, word, { strict: true }) : wordsMatch(this.tokens[i].norm, word, { loose: this.tokens[i].norm.length >= 4 }));
     while (k < words.length && cursor < this.tokens.length) {
+      // Going back over words already read in this same stream (live engines send the whole
+      // reading every time): follow them along one by one; mishearings here are ignored.
+      if (this.status[cursor] !== 'unread') {
+        if (same(cursor, words[k])) {
+          cursor += 1;
+          k += 1;
+          continue;
+        }
+        if (this.status[cursor + 1] !== 'unread' && same(cursor + 1, words[k])) {
+          cursor += 2;
+          k += 1;
+          continue;
+        }
+        const m0 = this._match(words, k, this._skipDone(cursor));
+        if (m0) {
+          for (const i of m0.filled) this.status[i] = 'filled';
+          for (const i of m0.read) this.status[i] = 'read';
+          cursor = m0.next;
+          k += m0.consumed;
+          stuck = null;
+        } else {
+          k += 1;
+        }
+        continue;
+      }
       const m = this._match(words, k, cursor);
       if (m) {
         for (const i of m.filled) this.status[i] = 'filled';
@@ -130,7 +159,9 @@ export class ReadingTracker {
       // Forgiving match: it's only ever compared with the one word we're waiting for.
       // After word help on this word, any close try at saying it counts.
       if (j === this.helpedAt && closeTry(T[j].norm, w[k])) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
-      if (wordsMatch(T[j].norm, w[k], { loose: !T[j].filler && T[j].norm.length >= 4 })) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
+      // ("a", "an", "the" only ever match themselves: "the" must not swallow "tooth".)
+      if (T[j].filler ? wordsMatch(T[j].norm, w[k], { strict: true }) : wordsMatch(T[j].norm, w[k], { loose: T[j].norm.length >= 4 }))
+        return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
       // Speech engine split one word in two ("sud den lee" for "suddenly")…
       if (k + 1 < w.length && wordsMatch(T[j].norm, w[k] + w[k + 1], { strict: true })) {
         return { read: [j], filled: [...filled], next: j + 1, consumed: 2 };

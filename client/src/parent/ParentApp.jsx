@@ -67,6 +67,8 @@ export default function ParentApp() {
         </div>
       </header>
 
+      {status.consentNeeded && <ConsentUpdate onDone={load} />}
+
       {!(status.claude && status.voice && status.storage === 'replit') && (
       <div className="status-row">
         {!status.claude && <Pill label="AI is off: add ANTHROPIC_API_KEY" />}
@@ -96,6 +98,76 @@ export default function ParentApp() {
         {tab === 'stats' && <Stats />}
         {tab === 'settings' && <Settings status={status} />}
       </main>
+    </div>
+  );
+}
+
+// Existing families accept the updated Terms (children's voices are now heard by ElevenLabs).
+function ConsentUpdate({ onDone }) {
+  const [reading, setReading] = useState(false);
+  const accept = async () => {
+    await api.post('/api/parent/consent');
+    setReading(false);
+    onDone();
+  };
+  return (
+    <div className="p-card consent-update">
+      <h2>We’ve updated our Terms & Privacy</h2>
+      <p className="muted">
+        To hear your children much better when they read aloud, the app now uses ElevenLabs’ speech-to-text. Until you accept, the iPad’s own
+        speech recognition is used.
+      </p>
+      <div className="p-actions">
+        <button className="btn" onClick={() => setReading(true)}>
+          Read what’s changed
+        </button>
+        <button className="btn primary" onClick={accept}>
+          Accept
+        </button>
+      </div>
+      {reading && <PrivacySheet onAccept={accept} onClose={() => setReading(false)} />}
+    </div>
+  );
+}
+
+// Settings: is the app hearing the children with ElevenLabs?
+function ListeningCard({ status }) {
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const test = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.post('/api/parent/listen-test');
+      setMsg(r.ok ? { ok: true, text: 'ElevenLabs listening is working ✓' } : { text: r.hint, detail: r.detail });
+    } catch (e) {
+      setMsg({ text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="p-card">
+      <h2>👂 Hearing your children</h2>
+      <p className="muted">
+        {status.listening === 'elevenlabs'
+          ? status.consentNeeded
+            ? 'ElevenLabs speech-to-text is ready, but you need to accept the updated Terms (at the top) before it is used. Until then the iPad’s own recognition is used.'
+            : 'The app uses ElevenLabs speech-to-text to hear your children read. If it’s ever unavailable, the iPad’s own recognition takes over.'
+          : 'Add ELEVENLABS_API_KEY in Replit Secrets to hear children with ElevenLabs. For now the iPad’s own recognition is used.'}
+      </p>
+      <div className="p-actions">
+        <button className="btn" onClick={test} disabled={busy}>
+          {busy ? 'Testing…' : '🎙️ Test listening'}
+        </button>
+        {msg?.ok && <span className="saved">{msg.text}</span>}
+      </div>
+      {msg && !msg.ok && (
+        <div className="notice">
+          {msg.text}
+          {msg.detail && <div className="muted small">{msg.detail}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -728,6 +800,7 @@ function Settings({ status }) {
 
   return (
     <section>
+      <ListeningCard status={status} />
       <NotificationsCard />
       <div className="p-card">
         <h2>Director’s voice</h2>
