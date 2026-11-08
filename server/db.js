@@ -177,6 +177,58 @@ const MIGRATIONS = [
     PRIMARY KEY (scope, week_start)
   );
   `,
+  // 3: Dibbly Dobs: coins become Dobs, learning sections, letters
+  `
+  ALTER TABLE kids RENAME COLUMN coins TO dobs;
+  ALTER TABLE kids ALTER COLUMN dobs SET DEFAULT 0;
+  ALTER TABLE kids ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}';
+  ALTER TABLE events RENAME COLUMN coins TO dobs;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS note TEXT;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS by_parent BOOLEAN NOT NULL DEFAULT false;
+  UPDATE kids SET dobs = 0;
+
+  CREATE TABLE IF NOT EXISTS stories (
+    id SERIAL PRIMARY KEY,
+    kid_id INT NOT NULL REFERENCES kids(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    keywords JSONB NOT NULL DEFAULT '[]',
+    chunks JSONB NOT NULL DEFAULT '{}',
+    picture TEXT,
+    reads INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS letters (
+    id SERIAL PRIMARY KEY,
+    thread_id INT,
+    from_kid INT NOT NULL REFERENCES kids(id) ON DELETE CASCADE,
+    to_kid INT REFERENCES kids(id) ON DELETE CASCADE,
+    to_family INT REFERENCES families(id) ON DELETE CASCADE,
+    topic TEXT,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'delivered',
+    read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS letters_to_kid ON letters (to_kid, status);
+  CREATE INDEX IF NOT EXISTS letters_thread ON letters (thread_id);
+  CREATE TABLE IF NOT EXISTS practice_sets (
+    id TEXT PRIMARY KEY,
+    kid_id INT NOT NULL REFERENCES kids(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    type TEXT NOT NULL,
+    items JSONB NOT NULL,
+    results JSONB,
+    score INT,
+    finished_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS practice_kid ON practice_sets (kid_id, kind, finished_at);
+  CREATE TABLE IF NOT EXISTS spell_sentences (
+    word TEXT PRIMARY KEY,
+    sentence TEXT NOT NULL
+  );
+  `,
 ];
 
 export async function migrate() {

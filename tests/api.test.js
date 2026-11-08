@@ -126,7 +126,7 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal((await A.post('/api/kid/read', { stats: {} })).data.gained.followers, 0, 'once a day');
   await A.post('/api/kid/word', { result: { type: 'spell' } });
   const help = (await A.post('/api/kid/help', { word: 'launch' })).data;
-  assert.equal(help.paid, true);
+  assert.equal(help.paid, false, 'word help is free by default');
 
   // Director call works without Claude (scripted fallback)
   let plan = {};
@@ -209,9 +209,10 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
 
   // Shop: buy, equip, decor; trophies
   const shopBefore = (await A.get('/api/kid/shop')).data;
+  assert.equal(shopBefore.dobs, 3, 'posting the daily video earned the default 3 Dibbly Dobs');
   const bought = await A.post('/api/kid/shop/buy', { itemId: 'hat-cap' });
   assert.equal(bought.status, 200);
-  assert.equal(bought.data.coins, shopBefore.coins - 15);
+  assert.equal(bought.data.dobs, shopBefore.dobs - 3);
   assert.equal((await A.put('/api/kid/avatar', { avatar: { hat: 'cap', hair: 'curly' } })).data.avatar.hat, 'cap');
   assert.equal((await A.put('/api/kid/avatar', { avatar: { hat: 'crown' } })).data.avatar.hat, null, 'cannot wear unowned items');
   assert.equal((await A.post('/api/kid/shop/buy', { itemId: 'decor-disco' })).status, 402);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
-import { Logo } from './Bits.jsx';
+import { DobsLogo as Logo } from './Dob.jsx';
 import { unlockAudio, tick, wrong } from '../sfx.js';
 
 // "Who's creating today?" → tap your avatar → 4-digit PIN.
@@ -57,7 +57,7 @@ export default function KidPicker({ kids, onIn }) {
       </header>
       {!kid ? (
         <main className="picker-main">
-          <h1 className="hero-title small">Who’s creating?</h1>
+          <h1 className="hero-title small">Who’s playing?</h1>
           <div className="picker-grid">
             {kids.map((k) => (
               <button key={k.id} className="picker-kid" onClick={() => setKid(k)}>

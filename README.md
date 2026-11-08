@@ -1,19 +1,17 @@
-# ⭐ Star Studio
+# 🟢 Dibbly Dobs
 
-A private daily video-challenge game for children aged 5–9, played on an iPad in Safari.
-It feels like being a creator; underneath, it's reading practice.
+A private learning and creativity app for children aged 4–11, played on an iPad in Safari.
+Children earn **Dibbly Dobs** for everything they do. Grown-ups decide what each activity is worth,
+can add Dobs for good behaviour, take some away, or take off what they spend at the shops.
 
-**A day in the studio:**
-1. **Read the script.** The brief uses this week's spelling words, and the words light up as the child reads aloud.
-2. **Word moment.** Spell an unlock word from tiles to win an effect, or name the video using an unlock word.
-3. **Director call.** A voice call with the Director (no subtitles, no menus) to plan the mood, the music, the big ending and any effects.
-4. **Studio camera.** Live weather, backdrops (the child is cut out, like a green screen), colour looks, TV frames, stickers and music.
-5. **Edit suite.** The server adds an intro, captions, effect hits, ducked music and a sing-along lyric card. There's one remix.
-6. **Post.** The child earns followers (with a 1-in-6 chance of a viral hit), then a grown-up approves the video.
-7. **Premiere.** The crew's videos are revealed together once everyone has posted, or at 6pm.
-8. **Afterwards.** Sticker reactions, one award per child per day, a weekly league, and Friday Premiere Night.
+**Five sections:**
+- 🎬 **Star Studio**: the once-a-day video challenge. Read the script, then a word moment, a call with the Director, the live effects camera, the auto-edit, and finally the crew premiere.
+- 📖 **Reading**: make up a story with Story Buddy on a voice call. Claude writes it at the child's level, using their keywords. They read it aloud with the word-by-word tracker and word help. They can do this as often as they like.
+- ✏️ **Writing**: write a story to a brother or sister, a crew friend, or their grown-up. A spelling check highlights mistakes and shows the right spelling; if it isn't sure which word was meant, the child says it out loud. Friends can continue the story. Stories to other families are checked by the sender's grown-up first.
+- 🐝 **Spelling**: five words for the year group (plus some of your weekly words), said aloud with a sentence. There's a hint after 2 tries, a bigger hint after 3, and then the option to give up.
+- 🔢 **Maths**: addition and subtraction (by year group), number bonds and times tables (you choose which), with five questions per set.
 
-There's also a studio with an avatar, a shop, decor and a trophy shelf, plus a Little Stars mode for younger children and a grown-ups dashboard (kids, approvals, briefs, keywords, crews, reading stats, deleting data).
+Also: a Dibbly Dobs leaderboard (family and crew, resets Monday), an avatar and studio shop that costs Dobs, a Dob history, and Little Stars mode for younger children.
 
 ---
 
@@ -24,8 +22,8 @@ There's also a studio with an avatar, a shop, decor and a trophy shelf, plus a L
 |---|---|---|
 | `SESSION_SECRET` | Any long random text (mash the keyboard, 40+ characters) | **Yes**: keeps logins and video links safe |
 | `DATABASE_URL` | Added automatically when you create the PostgreSQL database | **Yes** |
-| `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys | For Claude briefs, the Director and the edits |
-| `ELEVENLABS_API_KEY` | elevenlabs.io → API Keys (needs a paid plan from Replit's servers) | For the Director's voice |
+| `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys | For Story Buddy, stories, spell check, spelling sentences, Star Studio briefs, the Director and the edits |
+| `ELEVENLABS_API_KEY` | elevenlabs.io → API Keys (needs a paid plan from Replit's servers) | For the Director, Story Buddy and spelling voice |
 | `OPENAI_API_KEY` | platform.openai.com → API Keys | Optional: rewards unlock words said on camera, and times captions to speech |
 
 `PARENT_PASSCODE` is no longer used (each parent has their own account now). You can delete it.
@@ -64,6 +62,8 @@ node scripts/make-music.mjs     # regenerate the original music loops
 | Rewards, shop, trophies | `server/lib/rewards.js`, `server/lib/catalog.js` |
 | Crews, premieres | `server/lib/family.js`, `server/lib/videos.js`, `server/routes/kid.js` |
 | Grown-ups dashboard | `client/src/parent/ParentApp.jsx`, `server/routes/parent.js` |
+| Reading, Writing, Spelling, Maths | `client/src/learn/`, `server/routes/learn.js`, `server/lib/maths.js` |
+| Dibbly Dobs (values, earning, adjustments, leaderboard) | `server/lib/rewards.js` |
 | Database schema | `server/db.js` (migrations run on start) |
 
 **Privacy:**

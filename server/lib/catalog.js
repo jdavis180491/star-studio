@@ -1,6 +1,4 @@
-// Shop items, avatar parts and trophies. Prices are in coins.
-
-export const HELP_COST = 2;
+// Shop items, avatar parts and trophies. Prices are in Dibbly Dobs.
 
 export const AVATAR_DEFAULT = {
   skin: 's3',
@@ -28,36 +26,36 @@ export const AVATAR_OPTIONS = {
 export const SHOP = [
   { id: 'top-tee', type: 'top', name: 'Tee', price: 0 },
   { id: 'top-hoodie', type: 'top', name: 'Hoodie', price: 0 },
-  { id: 'top-jacket', type: 'top', name: 'Bomber jacket', price: 30 },
-  { id: 'top-sport', type: 'top', name: 'Sports kit', price: 20 },
-  { id: 'top-sparkle', type: 'top', name: 'Sparkle suit', price: 50 },
-  { id: 'hat-cap', type: 'hat', name: 'Cap', price: 15 },
-  { id: 'hat-beanie', type: 'hat', name: 'Beanie', price: 15 },
-  { id: 'hat-headphones', type: 'hat', name: 'Headphones', price: 30 },
-  { id: 'hat-wizard', type: 'hat', name: 'Wizard hat', price: 40 },
-  { id: 'hat-crown', type: 'hat', name: 'Crown', price: 60 },
-  { id: 'glasses-shades', type: 'glasses', name: 'Shades', price: 20 },
-  { id: 'glasses-hearts', type: 'glasses', name: 'Heart specs', price: 25 },
-  { id: 'glasses-stars', type: 'glasses', name: 'Star specs', price: 35 },
-  { id: 'glasses-visor', type: 'glasses', name: 'Cyber visor', price: 45 },
-  { id: 'decor-plant', type: 'decor', name: 'Plant', price: 10 },
-  { id: 'decor-poster', type: 'decor', name: 'Space poster', price: 15 },
-  { id: 'decor-rug', type: 'decor', name: 'Neon rug', price: 15 },
-  { id: 'decor-lava', type: 'decor', name: 'Lava lamp', price: 20 },
-  { id: 'decor-fairy', type: 'decor', name: 'Fairy lights', price: 20 },
-  { id: 'decor-neon', type: 'decor', name: 'Neon star sign', price: 25 },
-  { id: 'decor-ringlight', type: 'decor', name: 'Ring light', price: 30 },
-  { id: 'decor-chair', type: 'decor', name: 'Gamer chair', price: 40 },
-  { id: 'decor-cat', type: 'decor', name: 'Studio cat', price: 50 },
-  { id: 'decor-disco', type: 'decor', name: 'Disco ball', price: 60 },
+  { id: 'top-jacket', type: 'top', name: 'Bomber jacket', price: 6 },
+  { id: 'top-sport', type: 'top', name: 'Sports kit', price: 4 },
+  { id: 'top-sparkle', type: 'top', name: 'Sparkle suit', price: 10 },
+  { id: 'hat-cap', type: 'hat', name: 'Cap', price: 3 },
+  { id: 'hat-beanie', type: 'hat', name: 'Beanie', price: 3 },
+  { id: 'hat-headphones', type: 'hat', name: 'Headphones', price: 6 },
+  { id: 'hat-wizard', type: 'hat', name: 'Wizard hat', price: 8 },
+  { id: 'hat-crown', type: 'hat', name: 'Crown', price: 12 },
+  { id: 'glasses-shades', type: 'glasses', name: 'Shades', price: 4 },
+  { id: 'glasses-hearts', type: 'glasses', name: 'Heart specs', price: 5 },
+  { id: 'glasses-stars', type: 'glasses', name: 'Star specs', price: 7 },
+  { id: 'glasses-visor', type: 'glasses', name: 'Cyber visor', price: 9 },
+  { id: 'decor-plant', type: 'decor', name: 'Plant', price: 2 },
+  { id: 'decor-poster', type: 'decor', name: 'Space poster', price: 3 },
+  { id: 'decor-rug', type: 'decor', name: 'Neon rug', price: 3 },
+  { id: 'decor-lava', type: 'decor', name: 'Lava lamp', price: 4 },
+  { id: 'decor-fairy', type: 'decor', name: 'Fairy lights', price: 4 },
+  { id: 'decor-neon', type: 'decor', name: 'Neon star sign', price: 5 },
+  { id: 'decor-ringlight', type: 'decor', name: 'Ring light', price: 6 },
+  { id: 'decor-chair', type: 'decor', name: 'Gamer chair', price: 8 },
+  { id: 'decor-cat', type: 'decor', name: 'Studio cat', price: 10 },
+  { id: 'decor-disco', type: 'decor', name: 'Disco ball', price: 12 },
 ];
 
 export const FREE_ITEMS = SHOP.filter((i) => i.price === 0).map((i) => i.id);
 
 export const TROPHIES = [
-  { at: 100, id: 'rising', name: 'Rising Star', bonus: 20 },
-  { at: 1000, id: 'hitmaker', name: 'Hit Maker', bonus: 50 },
-  { at: 10000, id: 'mega', name: 'Mega Star', bonus: 100 },
+  { at: 100, id: 'rising', name: 'Rising Star' },
+  { at: 1000, id: 'hitmaker', name: 'Hit Maker' },
+  { at: 10000, id: 'mega', name: 'Mega Star' },
 ];
 
 export const trophiesFor = (followers) => TROPHIES.filter((t) => followers >= t.at).map((t) => t.id);

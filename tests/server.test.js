@@ -85,3 +85,27 @@ test('signed media links expire and cannot be tampered with', () => {
   assert.equal(verifySigned('raw', 'abc', exp, sig), false);
   assert.equal(verifySigned('final', 'abc', '1', sig), false);
 });
+
+import { makeSet, mathsSettings } from '../server/lib/maths.js';
+import { dobRules, DEFAULT_RULES } from '../server/lib/rewards.js';
+
+test('maths sets follow year group and settings', () => {
+  for (let n = 0; n < 30; n++) {
+    for (const q of makeSet('addition', 'R', {})) assert.ok(q.answer <= 10 && q.a > 0 && q.b > 0, q.q);
+    for (const q of makeSet('subtraction', 'Y1', {})) assert.ok(q.answer >= 0 && q.a <= 40, q.q);
+    for (const q of makeSet('subtraction', 'Y5', {})) assert.ok(q.answer >= 0);
+    for (const q of makeSet('bonds', 'Y2', { maths: { bonds: [100] } })) assert.ok(q.answer + q.a === 100);
+    for (const q of makeSet('times', 'Y3', { maths: { timesTables: [3, 4] } })) assert.ok(q.answer % 3 === 0 || q.answer % 4 === 0);
+  }
+  const set = makeSet('times', 'Y3', { maths: { timesTables: [9] } });
+  assert.equal(new Set(set.map((q) => q.q)).size, 5, 'no repeated questions');
+  assert.deepEqual(mathsSettings({ maths: { timesTables: [99], bonds: [] } }), { timesTables: [2, 5, 10], bonds: [10] }, 'bad settings fall back');
+});
+
+test('Dob values are whole numbers between 0 and 50', () => {
+  const r = dobRules({ dobRules: { reading: '7', writing: -3, spelling: 999, maths: 'x' } });
+  assert.equal(r.reading, 7);
+  assert.equal(r.writing, 0);
+  assert.equal(r.spelling, 50);
+  assert.equal(dobRules({}).studio, DEFAULT_RULES.studio);
+});

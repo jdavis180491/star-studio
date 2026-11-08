@@ -32,7 +32,8 @@ export function publicKid(k, { self = false } = {}) {
   return {
     ...base,
     yearGroup: k.year_group,
-    coins: k.coins,
+    dobs: k.dobs,
+    settings: k.settings,
     streak: k.streak,
     bestStreak: k.best_streak,
     lastPostDate: k.last_post_date,

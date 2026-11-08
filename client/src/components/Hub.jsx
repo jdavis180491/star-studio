@@ -1,29 +1,31 @@
 import React from 'react';
 import Avatar from './Avatar.jsx';
-import { CoinPill, formatCount } from './Bits.jsx';
+import { formatCount } from './Bits.jsx';
+import { DobPill, DobIcon } from './Dob.jsx';
 
 const NAV = [
-  { id: 'today', icon: '🎬', name: 'Today' },
-  { id: 'crew', icon: '🍿', name: 'Crew' },
-  { id: 'studio', icon: '✨', name: 'My Studio' },
-  { id: 'channel', icon: '📼', name: 'My Channel' },
+  { id: 'home', icon: '🏠', name: 'Home' },
+  { id: 'leaderboard', icon: '🏆', name: 'Leaderboard' },
+  { id: 'me', icon: '✨', name: 'Me' },
 ];
 
-// The frame around the kid's app: who's logged in, followers, coins, and the tabs.
-export default function Hub({ kid, tab, onTab, onSwitch, children }) {
+// The frame around the kid's app: who's logged in, their Dibbly Dobs, and the tabs.
+export default function Hub({ kid, tab, onTab, onSwitch, children, showFollowers }) {
   return (
     <div className="hub">
       <header className="hub-top">
-        <button className="hub-me" onClick={onSwitch} aria-label="Switch creator">
+        <button className="hub-me" onClick={onSwitch} aria-label="Switch person">
           <Avatar avatar={kid.avatar} size={52} />
           <span className="hub-name">{kid.channelName}</span>
         </button>
         <div className="topbar-right">
-          <div className="followers-pill" aria-label={`${kid.followers} followers`}>
-            <span className="fp-icon">★</span>
-            {formatCount(kid.followers)}
-          </div>
-          <CoinPill coins={kid.coins} />
+          {showFollowers && (
+            <div className="followers-pill" aria-label={`${kid.followers} followers`}>
+              <span className="fp-icon">★</span>
+              {formatCount(kid.followers)}
+            </div>
+          )}
+          <DobPill dobs={kid.dobs} />
         </div>
       </header>
       <div className="hub-body">{children}</div>
@@ -36,6 +38,49 @@ export default function Hub({ kid, tab, onTab, onSwitch, children }) {
         ))}
       </nav>
     </div>
+  );
+}
+
+const SECTIONS = [
+  { id: 'studio', name: 'Star Studio', sub: 'Today’s video challenge', icon: '🎬', cls: 'studio' },
+  { id: 'reading', name: 'Reading', sub: 'Make up a story & read it', icon: '📖', cls: 'reading' },
+  { id: 'writing', name: 'Writing', sub: 'Write to a friend', icon: '✏️', cls: 'writing' },
+  { id: 'spelling', name: 'Spelling', sub: '5 words to spell', icon: '🐝', cls: 'spelling' },
+  { id: 'maths', name: 'Maths', sub: 'Sums, bonds & tables', icon: '🔢', cls: 'maths' },
+];
+
+/** Dibbly Dobs home: the five sections. */
+export function HomeTab({ kid, today, unread, rules, onOpen }) {
+  const hour = new Date().getHours();
+  const hello = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const posted = today?.progress?.posted;
+  return (
+    <main className="home-grid-wrap">
+      <div className="home-hello">
+        <DobIcon size={64} className="wiggle" />
+        <div>
+          <div className="muted-line">{hello},</div>
+          <h1 className="hero-title small">{kid.channelName}</h1>
+        </div>
+      </div>
+      <div className="home-grid">
+        {SECTIONS.map((s) => (
+          <button key={s.id} className={`home-tile ${s.cls}`} onClick={() => onOpen(s.id)}>
+            <span className="home-tile-icon">{s.icon}</span>
+            <span className="home-tile-name">{s.name}</span>
+            <span className="home-tile-sub">
+              {s.id === 'studio' ? (posted ? 'Posted today ✓' : today?.briefs ? `Today: ${Object.values(today.briefs)[0]?.title}` : s.sub) : s.sub}
+            </span>
+            {s.id === 'writing' && unread > 0 && <span className="count-badge big">{unread}</span>}
+            {rules && (
+              <span className="tile-dobs">
+                <DobIcon size={20} />+{s.id === 'studio' ? rules.studio : s.id === 'maths' ? rules['maths-addition'] : rules[s.id]}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </main>
   );
 }
 

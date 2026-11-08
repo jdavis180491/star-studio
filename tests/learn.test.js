@@ -1,0 +1,178 @@
+// Dibbly Dobs learning sections against a real Postgres (set TEST_DATABASE_URL to run).
+// Reading, Writing (with cross-family approval + continuing), Spelling, Maths,
+// Dob values, good/naughty/spent adjustments and the leaderboard.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn, execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const DB = process.env.TEST_DATABASE_URL;
+const PORT = 3800 + Math.floor(Math.random() * 90);
+const BASE = `http://localhost:${PORT}`;
+
+function client() {
+  let cookie = '';
+  const call = async (method, url, body) => {
+    const res = await fetch(BASE + url, {
+      method,
+      headers: { 'x-star-studio': '1', ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const set = res.headers.get('set-cookie');
+    if (set) cookie = set.split(';')[0];
+    return { status: res.status, data: await res.json().catch(() => ({})) };
+  };
+  return { get: (u) => call('GET', u), post: (u, b) => call('POST', u, b || {}), put: (u, b) => call('PUT', u, b || {}) };
+}
+
+test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) => {
+  const dbName = `ddtest_${Date.now()}`;
+  execFileSync('psql', [DB, '-q', '-c', `CREATE DATABASE ${dbName}`]);
+  const url = DB.replace(/\/[^/?]+(\?|$)/, `/${dbName}$1`);
+  const server = spawn(process.execPath, [path.resolve('server/index.js')], {
+    cwd: fs.mkdtempSync(path.join(os.tmpdir(), 'dd-')),
+    env: { ...process.env, DATABASE_URL: url, PORT: String(PORT), SESSION_SECRET: 't', ANTHROPIC_API_KEY: '', ELEVENLABS_API_KEY: '', OPENAI_API_KEY: '', REPL_ID: '' },
+    stdio: 'ignore',
+  });
+  t.after(() => {
+    server.kill();
+    try {
+      execFileSync('psql', [DB, '-q', '-c', `DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`]);
+    } catch {
+      /* ignore */
+    }
+  });
+  for (let i = 0; i < 80; i++) {
+    if ((await fetch(`${BASE}/api/health`).catch(() => null))?.ok) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  // Family A: two siblings. Family B: one child. A crew links A1 and B1.
+  const A = client();
+  await A.post('/api/auth/signup', { email: 'a@x.com', password: 'password1', consent: true });
+  const a1 = (await A.post('/api/parent/kids', { name: 'Ann', channelName: 'Ann TV', pin: '1111', track: 'star', yearGroup: 'Y3' })).data.kid;
+  const a2 = (await A.post('/api/parent/kids', { name: 'Bob', channelName: 'Bob TV', pin: '2222', track: 'little', yearGroup: 'R' })).data.kid;
+  const B = client();
+  await B.post('/api/auth/signup', { email: 'b@x.com', password: 'password2', consent: true });
+  const b1 = (await B.post('/api/parent/kids', { name: 'Cat', channelName: 'Cat TV', pin: '3333', track: 'star', yearGroup: 'Y4' })).data.kid;
+  const crew = (await A.post('/api/parent/crews', { name: 'Pals', kidIds: [a1.id] })).data.crew;
+  await B.post('/api/parent/crews/join', { code: crew.code, kidIds: [b1.id] });
+
+  // Grown-up A sets Dob values and maths settings
+  const rules = (await A.put('/api/parent/dob-rules', { rules: { reading: 4, writing: 3, continue: 2, spelling: 2, 'maths-times': 5, helpCost: 1 } })).data.rules;
+  assert.equal(rules.reading, 4);
+  assert.equal(rules['maths-addition'], 1, 'untouched values keep their defaults');
+  await A.put(`/api/parent/kids/${a1.id}`, { maths: { timesTables: [7], bonds: [20] } });
+
+  await A.post('/api/kid/login', { kidId: a1.id, pin: '1111' });
+  assert.equal((await A.get('/api/kid/rules')).data.helpCost, 1);
+
+  // ---------------- Reading (offline Story Buddy + offline story)
+  let turn = (await A.post('/api/kid/story/turn', { history: [], plan: {} })).data;
+  const history = [];
+  for (const said of ['a dragon called Zog', 'on the moon', 'he loses his roar']) {
+    history.push({ who: 'buddy', text: turn.say }, { who: 'kid', text: said });
+    turn = (await A.post('/api/kid/story/turn', { history, plan: turn.plan })).data;
+  }
+  assert.equal(turn.done, true);
+  assert.equal(turn.plan.hero, 'a dragon called Zog');
+  const story = (await A.post('/api/kid/story/create', { ideas: turn.plan })).data.story;
+  assert.match(story.text, /dragon called Zog/);
+  assert.ok(story.keywords.length >= 1);
+  let r = (await A.post(`/api/kid/stories/${story.id}/read`, { stats: { wordsRead: 50, totalWords: 55, keywords: story.keywords, keywordsRead: story.keywords } })).data;
+  assert.equal(r.gained.dobs, 4);
+  r = (await A.post(`/api/kid/stories/${story.id}/read`, { stats: { wordsRead: 55, totalWords: 55 } })).data;
+  assert.equal(r.dobs, 8, 'reading earns every time');
+  assert.equal((await A.get('/api/kid/stories')).data.stories[0].reads, 2);
+
+  // ---------------- Writing
+  const recips = (await A.get('/api/kid/writing/recipients')).data.recipients;
+  assert.deepEqual(recips.map((x) => x.channelName).sort(), ['Bob TV', 'Cat TV', 'My grown-up']);
+  assert.equal(recips.find((x) => x.channelName === 'Cat TV').sameFamily, false);
+  const topic = (await A.get('/api/kid/writing/topic?to=Cat%20TV')).data;
+  assert.match(topic.topic, /Cat TV/);
+  assert.equal((await A.post('/api/kid/writing/check', { text: 'I went to the parc becos' })).data.unavailable, true, 'spell check needs Claude');
+  // to a sibling: delivered straight away
+  r = (await A.post('/api/kid/letters', { to: { kidId: a2.id }, topic: 'Hi', body: 'Dear Bob, a penguin is in the bath.' })).data;
+  assert.equal(r.status, 'delivered');
+  assert.equal(r.gained.dobs, 3);
+  // to a crew friend: waits for grown-up A
+  r = (await A.post('/api/kid/letters', { to: { kidId: b1.id }, topic: topic.topic, body: 'Dear Cat, my shoes started talking today!' })).data;
+  assert.equal(r.status, 'pending');
+  // can't write to a stranger
+  assert.equal((await A.post('/api/kid/letters', { to: { kidId: 9999 }, body: 'hello there you' })).status, 400);
+  // B can't see it yet
+  await B.post('/api/kid/login', { kidId: b1.id, pin: '3333' });
+  assert.equal((await B.get('/api/kid/letters')).data.inbox.length, 0);
+  // grown-up A approves (A is still in parent mode from signup)
+  const pending = (await A.get('/api/parent/letters')).data.letters.find((l) => l.status === 'pending');
+  assert.equal((await B.post(`/api/parent/letters/${pending.id}/approve`)).status, 404, 'only the sender’s grown-up approves');
+  assert.equal((await A.post(`/api/parent/letters/${pending.id}/approve`)).status, 200);
+  const inbox = (await B.get('/api/kid/letters')).data.inbox;
+  assert.equal(inbox.length, 1);
+  assert.equal(inbox[0].unread, true);
+  const thread = (await B.get(`/api/kid/letters/thread/${inbox[0].threadId}`)).data;
+  assert.equal(thread.canContinue, true);
+  // B continues the story → back to A, waits for B's grown-up
+  r = (await B.post('/api/kid/letters', { threadId: inbox[0].threadId, body: 'Then my socks joined in and sang!' })).data;
+  assert.equal(r.status, 'pending');
+  const bPending = (await B.get('/api/parent/letters')).data.letters.find((l) => l.status === 'pending');
+  await B.post(`/api/parent/letters/${bPending.id}/approve`);
+  const aThread = (await A.get(`/api/kid/letters/thread/${inbox[0].threadId}`)).data;
+  assert.equal(aThread.parts.length, 2);
+  assert.equal(aThread.canContinue, true);
+
+  // ---------------- Spelling
+  const sp = (await A.post('/api/kid/spelling/start')).data;
+  assert.equal(sp.items.length, 5);
+  assert.ok(sp.items.every((it) => it.sentence.includes(it.word) && it.line.id && it.chunks.length));
+  assert.equal((await A.post(`/api/kid/practice/${sp.setId}/finish`, { results: [{ correct: true }] })).status, 400, 'must finish all 5');
+  r = (await A.post(`/api/kid/practice/${sp.setId}/finish`, { results: sp.items.map((_, i) => ({ correct: i < 4, tries: i + 1, gaveUp: i === 4 })) })).data;
+  assert.equal(r.score, 4);
+  assert.equal(r.gained.dobs, 2);
+  assert.equal((await A.post(`/api/kid/practice/${sp.setId}/finish`, { results: sp.items.map(() => ({ correct: true })) })).status, 409, 'no double claiming');
+
+  // ---------------- Maths (settings respected)
+  const times = (await A.post('/api/kid/maths/start', { type: 'times' })).data;
+  assert.equal(times.questions.length, 5);
+  assert.ok(times.questions.every((q) => q.q.includes('7') && q.answer % 7 === 0), 'only the 7 times table');
+  const bonds = (await A.post('/api/kid/maths/start', { type: 'bonds' })).data;
+  assert.ok(bonds.questions.every((q) => q.q.endsWith('= 20') && q.answer >= 0 && q.answer <= 20));
+  r = (await A.post(`/api/kid/practice/${times.setId}/finish`, { results: times.questions.map(() => ({ correct: true })) })).data;
+  assert.equal(r.gained.dobs, 5);
+  assert.equal((await A.post('/api/kid/maths/start', { type: 'cake' })).status, 400);
+
+  // ---------------- Word help now costs 1 Dob
+  const before = (await A.get('/api/kid/dobs')).data.dobs;
+  const help = (await A.post('/api/kid/help', { word: 'dragon' })).data;
+  assert.equal(help.paid, true);
+  assert.equal(help.dobs, before - 1);
+
+  // ---------------- Grown-up: good / naughty / spent, and the feed
+  r = (await A.post('/api/parent/dobs/adjust', { kidId: a1.id, reason: 'good', amount: 3, note: 'Tidied room' })).data;
+  r = (await A.post('/api/parent/dobs/adjust', { kidId: a1.id, reason: 'naughty', amount: 2, note: 'Bedtime fuss' })).data;
+  const spent = (await A.post('/api/parent/dobs/adjust', { kidId: a1.id, reason: 'spent', amount: 9999 }));
+  assert.equal(spent.status, 400, 'cannot spend more than they have');
+  r = (await A.post('/api/parent/dobs/adjust', { kidId: a1.id, reason: 'spent', amount: 5, note: 'Sweets' })).data;
+  const feed = (await A.get('/api/parent/dobs')).data.feed;
+  assert.equal(feed[0].type, 'parent-spent');
+  assert.equal(feed[0].dobs, -5);
+  assert.ok(feed.some((e) => e.type === 'reading' && /Read “/.test(e.what)), 'the grown-up sees what they did');
+  assert.equal((await B.post('/api/parent/dobs/adjust', { kidId: a1.id, reason: 'good', amount: 1 })).status, 404, 'not your child');
+  const hist = (await A.get('/api/kid/dobs')).data.history;
+  assert.ok(hist.some((h) => h.note === 'Tidied room'));
+
+  // ---------------- Leaderboard: family + crew
+  const board = (await A.get('/api/kid/leaderboard')).data;
+  assert.deepEqual(board.rows.map((x) => x.channelName).sort(), ['Ann TV', 'Bob TV', 'Cat TV']);
+  assert.equal(board.rows[0].channelName, 'Ann TV');
+
+  // ---------------- Stats for the grown-up
+  const ps = (await A.get('/api/parent/practice-stats')).data.kids.find((k) => k.kidId === a1.id);
+  assert.equal(ps.spelling.sets, 1);
+  assert.equal(ps.maths.find((m) => m.type === 'times').accuracy, 100);
+  assert.equal(ps.writing, 2);
+  assert.deepEqual(ps.mathsSettings.timesTables, [7]);
+});

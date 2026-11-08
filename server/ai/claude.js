@@ -233,3 +233,143 @@ ${transcript ? `What the creator says in the clip (timed transcript):\n${transcr
 ${remix ? 'This is a REMIX: make it feel different from a normal edit (different caption style and effect timing, more surprising).' : ''}`;
   return askJSON({ system: EDIT_SYSTEM, user, schema: EditSchema, maxTokens: 4000, effort: 'low' });
 }
+
+// ---------------------------------------------------------------- reading: Story Buddy
+
+export const LEVELS = {
+  R: { words: [15, 30], guide: '2-3 very short sentences. Mostly CVC words (cat, sun, hop) and Reception tricky words (the, I, to, go, was).' },
+  Y1: { words: [30, 50], guide: '4-5 short sentences. Simple phonics words with digraphs (sh, ch, ai, ee, igh, oa, oo).' },
+  Y2: { words: [50, 80], guide: '5-7 sentences. Year 2 common words, some two-syllable words.' },
+  Y3: { words: [80, 110], guide: 'Short paragraphs. Mostly familiar words, a few longer words.' },
+  Y4: { words: [100, 130], guide: 'Two paragraphs, some dialogue, richer vocabulary.' },
+  Y5: { words: [120, 160], guide: 'Two or three paragraphs, varied sentences, some ambitious vocabulary.' },
+  Y6: { words: [140, 180], guide: 'Two or three paragraphs, varied sentences and ambitious vocabulary.' },
+};
+
+const BUDDY_SYSTEM = `You are "Story Buddy", a playful, warm story-maker in a private reading game for children aged 4-11 in the UK.
+You are on a VOICE CALL with a child, inventing a story together that they will then read aloud. Your words are spoken by a voice actor: talk naturally, short and friendly, no emojis or lists.
+- 1-2 short sentences per turn (max 30 words; for young children max 18 simple words).
+- Ask ONE question at a time, react to their idea with excitement, build on it.
+- Find out: who the hero is, where it happens, and what goes wrong or what surprise happens. Optionally a funny detail.
+- Never ask for real names, school or address. If they give a real-sounding name, use it as a character name only if it sounds made up; otherwise suggest a fun character name.
+- If they're stuck, offer two silly ideas. If they say nothing, nudge gently.
+- When you have the hero, the place and the problem (or after 4 of their replies), say a short excited wrap-up ("Ooh, I'm writing it now!") and set done = true.
+Return the story ideas gathered so far each turn (null if not decided).`;
+
+const BuddySchema = z.object({
+  say: z.string(),
+  hero: z.string().nullable(),
+  place: z.string().nullable(),
+  problem: z.string().nullable(),
+  detail: z.string().nullable(),
+  done: z.boolean(),
+});
+
+export async function storyTurn({ history, ideas, young }) {
+  const transcript = history
+    .slice(-14)
+    .map((h) => `${h.who === 'kid' ? 'CHILD' : 'BUDDY'}: ${String(h.text || '').slice(0, 400) || '(silence)'}`)
+    .join('\n');
+  const user = `${young ? 'This child is very young (age 4-6): use tiny, simple words.\n' : ''}Ideas so far: ${JSON.stringify(ideas || {})}
+Child replies so far: ${history.filter((h) => h.who === 'kid').length}
+
+Call so far:
+${transcript || '(the call has just connected: say hi and ask your first question)'}
+
+Write Story Buddy's next line.`;
+  const out = await askJSON({ system: BUDDY_SYSTEM, user, schema: BuddySchema, maxTokens: 1500, effort: 'low' });
+  const merged = { ...ideas };
+  for (const k of ['hero', 'place', 'problem', 'detail']) if (out[k]) merged[k] = out[k];
+  return { say: out.say.trim(), plan: merged, done: Boolean(out.done) };
+}
+
+const StorySchema = z.object({
+  title: z.string(),
+  text: z.string(),
+  picture_emoji: z.string(),
+  keyword_chunks: z.array(z.object({ word: z.string(), chunks: z.array(z.string()) })),
+});
+
+/** Write a reading passage at the child's level from the ideas they gave. */
+export async function writeStory({ ideas, keywords, yearGroup }) {
+  const level = LEVELS[yearGroup] || LEVELS.Y3;
+  const [lo, hi] = level.words;
+  let feedback = '';
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const user = `Write a short story for a child to read ALOUD, built from their ideas: ${JSON.stringify(ideas)}.
+Reading level (England, ${yearGroup}): ${level.guide} Length: ${lo}-${hi} words.
+Use each of these keywords at least once, exactly as written: ${keywords.join(', ')}.
+Make it funny and exciting, with a satisfying ending. British English. Plain text paragraphs only, no headings.
+${feedback && `Fix these problems from your last attempt:\n${feedback}`}`;
+    const out = await askJSON({
+      system: 'You write short, funny, perfectly levelled reading passages for children in UK primary schools.',
+      user,
+      schema: StorySchema,
+      maxTokens: 4000,
+      effort: 'medium',
+    });
+    const tokens = tokenizeBrief(out.text);
+    const problems = keywords.filter((k) => !tokens.some((t) => isKeywordForm(normalizeWord(k), t.norm))).map((k) => `Missing keyword "${k}".`);
+    if (tokens.length < lo * 0.8 || tokens.length > hi * 1.3) problems.push(`It is ${tokens.length} words; aim for ${lo}-${hi}.`);
+    last = { ...out, problems };
+    if (!problems.length) break;
+    feedback = problems.join('\n');
+  }
+  return { title: last.title.trim(), text: last.text.trim().replace(/[ \t]+/g, ' '), picture: last.picture_emoji, chunks: cleanChunks(last.keyword_chunks, keywords) };
+}
+
+// ---------------------------------------------------------------- writing: spell check
+
+const SpellSchema = z.object({
+  issues: z.array(
+    z.object({
+      word: z.string().describe('The misspelt word exactly as the child typed it'),
+      suggestion: z.string().describe('The correctly spelt word they most likely meant (empty if you really cannot tell)'),
+      sure: z.boolean().describe('false if you are not confident which word they meant'),
+    })
+  ),
+});
+
+/** Find misspelt words in a child's writing. Grammar and style are ignored on purpose. */
+export async function spellCheck(text) {
+  const out = await askJSON({
+    system: `You check SPELLING ONLY in writing by children aged 5-11 in the UK. Use British spelling as correct (colour, favourite, mum).
+Ignore grammar, punctuation, capital letters and style. Names and made-up words in a story are fine. Children often spell phonetically ("becos" = because, "frend" = friend): suggest the word they meant.
+List each misspelt word once. If you can't tell which word they meant, set sure=false.`,
+    user: `Check the spelling:\n"""${String(text).slice(0, 4000)}"""`,
+    schema: SpellSchema,
+    maxTokens: 3000,
+    effort: 'low',
+  });
+  return out.issues.filter((i) => i.word && i.word.toLowerCase() !== i.suggestion.toLowerCase()).slice(0, 40);
+}
+
+const SaidSchema = z.object({ word: z.string().describe('Correct British spelling of the word they meant') });
+
+/** The child typed something unclear, then said the word out loud: work out the spelling. */
+export async function resolveSpoken({ typed, said, context }) {
+  const out = await askJSON({
+    system: 'A child aged 5-11 misspelt a word, then said it aloud (speech-to-text below). Give the correct British spelling of the single word they meant.',
+    user: `They typed: "${String(typed).slice(0, 40)}". They said: "${String(said).slice(0, 80)}". Sentence: "${String(context).slice(0, 300)}"`,
+    schema: SaidSchema,
+    maxTokens: 500,
+    effort: 'low',
+  });
+  return out.word.trim();
+}
+
+// ---------------------------------------------------------------- spelling: example sentences
+
+const SentencesSchema = z.object({ sentences: z.array(z.object({ word: z.string(), sentence: z.string() })) });
+
+export async function spellingSentences(words) {
+  const out = await askJSON({
+    system: 'You write one short, clear, fun example sentence per spelling word for a UK primary school spelling test. 6-14 words, uses the word exactly as given, British English.',
+    user: `Words: ${words.join(', ')}`,
+    schema: SentencesSchema,
+    maxTokens: 1500,
+    effort: 'low',
+  });
+  return out.sentences;
+}
