@@ -22,8 +22,9 @@ function closeTry(target, spoken) {
 
 const LOOKAHEAD = 6;
 export const UNLOCK_RATIO = 1;
-// Tiny words speech engines often swallow. Never keywords.
-const FILLERS = new Set(['a', 'an', 'the', 'to', 'of', 'and', 'in', 'on', 'is', 'it', 'at', 'i', 'as', 'by', 'or', 'so', 'up', 'we', 'he', 'me', 'my', 'oh', 'be', 'for', 'was', 'are', 'you', 'your', 'its']);
+// Only "a", "an" and "the" can be let through unheard (speech engines often swallow them), and only
+// when the very next word is read. Every other word must be heard.
+const FILLERS = new Set(['a', 'an', 'the']);
 
 export class ReadingTracker {
   constructor(text, keywords = []) {
@@ -42,6 +43,7 @@ export class ReadingTracker {
     this.missCursor = null; // the word they're trying to say…
     this.misses = new Map(); // …and what the engine heard instead
     this.needsHelp = null; // after 3 tries, word help pops up
+    this.helpedAt = null; // word help was used on this word
     this.sessionKey = null;
     this.sessionStart = 0;
     this.heard = '';
@@ -78,6 +80,8 @@ export class ReadingTracker {
         stuck = null;
       } else if (this._ahead(words[k], cursor)) {
         stuck = cursor;
+        k += 1;
+      } else if (this._notATry(words[k], cursor)) {
         k += 1;
       } else {
         // An attempt at the word that wasn't recognised. Two close tries count it.
@@ -119,9 +123,11 @@ export class ReadingTracker {
     const T = this.tokens;
     const n = T.length;
     const filled = [];
-    for (let j = cursor; j < n && filled.length <= 2; j++) {
+    for (let j = cursor; j < n && filled.length <= 1; j++) {
       if (this.status[j] !== 'unread') continue;
       // Forgiving match: it's only ever compared with the one word we're waiting for.
+      // After word help on this word, any close try at saying it counts.
+      if (j === this.helpedAt && closeTry(T[j].norm, w[k])) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
       if (wordsMatch(T[j].norm, w[k], { loose: !T[j].filler && T[j].norm.length >= 4 })) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
       // Speech engine split one word in two ("sud den lee" for "suddenly")…
       if (k + 1 < w.length && wordsMatch(T[j].norm, w[k] + w[k + 1], { strict: true })) {
@@ -139,11 +145,19 @@ export class ReadingTracker {
 
   // Did they say a word further on (so they've skipped the next one)?
   _ahead(word, cursor) {
-    if (!word || word.length < 3) return false;
+    if (!word || FILLERS.has(word)) return false;
     const T = this.tokens;
-    for (let j = cursor + 1; j < Math.min(T.length, cursor + 1 + LOOKAHEAD); j++) {
+    for (let j = cursor + 1; j < T.length; j++) {
       if (!T[j].filler && this.status[j] === 'unread' && wordsMatch(T[j].norm, word)) return true;
     }
+    return false;
+  }
+
+  // Re-reading words they've already done (or a tiny word) isn't a try at the next word.
+  _notATry(word, cursor) {
+    if (!word || FILLERS.has(word)) return true;
+    const T = this.tokens;
+    for (let j = Math.max(0, cursor - LOOKAHEAD); j < cursor; j++) if (wordsMatch(T[j].norm, word)) return true;
     return false;
   }
 
@@ -166,12 +180,14 @@ export class ReadingTracker {
     this.stuck = null;
   }
 
-  /** Count the next word as read after the child used word help on it. */
+  /**
+   * Word help on the word they're waiting on: it still has to be said, but now any close
+   * try counts (they've just heard how it sounds). Help on a word further on does nothing.
+   */
   helpedWith(index) {
     if (index !== this._skipDone(this.cursor) || this.status[index] !== 'unread') return false;
-    this.status[index] = 'read';
-    this.cursor = this._skipDone(index + 1);
-    this.sessionStart = this.cursor;
+    this.helpedAt = index;
+    this.sessionStart = this._skipDone(this.cursor);
     this.sessionKey = null;
     this.stuck = null;
     this.missCursor = null;

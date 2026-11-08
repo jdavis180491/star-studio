@@ -67,12 +67,26 @@ test('skipping a word stops the tracker and flags the word until it is read', ()
   assert.equal(s.unlocked, true);
 });
 
-test('word help on the next word counts it, but not on a word further on', () => {
+test('word help never skips a word: it must still be said, but any close try then counts', () => {
   const t = new ReadingTracker('Suddenly the gravity switches off.', []);
-  assert.equal(t.helpedWith(2), false, 'cannot skip ahead with help');
+  assert.equal(t.helpedWith(2), false, 'help on a word further on does nothing');
   assert.equal(t.helpedWith(0), true);
   t.ingest(1, 'the gravity switches off');
-  assert.ok(t.snapshot().unlocked);
+  assert.equal(t.snapshot().unlocked, false, 'help alone does not count the word');
+  assert.equal(t.snapshot().nextIndex, 0);
+  t.ingest(2, 'sadly the gravity switches off');
+  assert.ok(t.snapshot().unlocked, 'a close try after help counts');
+});
+
+test('only a, an and the can slip through unheard', () => {
+  const t = new ReadingTracker('You must find the big red key.', []);
+  t.ingest(1, 'must find big red key');
+  const s = t.snapshot();
+  assert.equal(s.unlocked, false, '"You" was skipped');
+  assert.equal(s.nextIndex, 0);
+  const t2 = new ReadingTracker('You must find the big red key.', []);
+  t2.ingest(1, 'you must find big red key');
+  assert.ok(t2.snapshot().unlocked, '"the" may be swallowed by the speech engine');
 });
 
 test('random chatter does not light up the brief', () => {
@@ -159,6 +173,8 @@ test('two close tries at a misheard word count it; three tries ask for word help
   assert.equal(t.snapshot().needsHelp, 2, 'three tries: help pops up for "dragon"');
   assert.equal(t.helpedWith(2), true);
   t.ingest(6, 'sneezed');
+  assert.equal(t.snapshot().unlocked, false, 'still has to say "dragon"');
+  t.ingest(7, 'drogan sneezed');
   assert.ok(t.snapshot().unlocked);
 });
 
