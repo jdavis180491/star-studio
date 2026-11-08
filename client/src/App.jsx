@@ -64,7 +64,7 @@ export default function App() {
 
   const kid = me?.kid;
   const setKid = (k) => setMe((m) => ({ ...m, kid: k }));
-  const applyReward = (r) => r && setMe((m) => ({ ...m, kid: { ...m.kid, followers: r.followers ?? m.kid.followers, dobs: r.dobs ?? m.kid.dobs } }));
+  const applyReward = (r) => r && setMe((m) => ({ ...m, kid: { ...m.kid, dobs: r.dobs ?? m.kid.dobs } }));
 
   if (error) return <Center><div className="notice">{error}</div></Center>;
   if (!me) return <Center><div className="loading">Loading…</div></Center>;
@@ -182,7 +182,6 @@ export default function App() {
         setTab(t);
       }}
       onSwitch={switchKid}
-      showFollowers={section === 'studio'}
     >
       {section === 'studio' ? (
         <>

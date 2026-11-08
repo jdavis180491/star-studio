@@ -53,12 +53,13 @@ export const SHOP = [
 export const FREE_ITEMS = SHOP.filter((i) => i.price === 0).map((i) => i.id);
 
 export const TROPHIES = [
-  { at: 100, id: 'rising', name: 'Rising Star' },
-  { at: 1000, id: 'hitmaker', name: 'Hit Maker' },
-  { at: 10000, id: 'mega', name: 'Mega Star' },
+  { at: 50, id: 'rising', name: 'Rising Star' },
+  { at: 250, id: 'hitmaker', name: 'Super Star' },
+  { at: 1000, id: 'mega', name: 'Mega Star' },
 ];
 
-export const trophiesFor = (followers) => TROPHIES.filter((t) => followers >= t.at).map((t) => t.id);
+/** Trophies go by Dibbly Dobs ever earned, so spending never takes one away. */
+export const trophiesFor = (dobsEarned) => TROPHIES.filter((t) => dobsEarned >= t.at).map((t) => t.id);
 
 export const STICKERS = ['🔥', '😂', '😮', '👏', '💖', '🤯'];
 export const AWARDS = [

@@ -23,9 +23,9 @@ const ITEM_ICONS = {
   'glasses-shades': '🕶️', 'glasses-hearts': '😍', 'glasses-stars': '🤩', 'glasses-visor': '🥽', ...DECOR_ICONS,
 };
 const TROPHIES = [
-  { id: 'rising', name: 'Rising Star', at: 100, color: '#cd7f32' },
-  { id: 'hitmaker', name: 'Hit Maker', at: 1000, color: '#c0c7d4' },
-  { id: 'mega', name: 'Mega Star', at: 10000, color: '#ffd400' },
+  { id: 'rising', name: 'Rising Star', at: 50, color: '#cd7f32' },
+  { id: 'hitmaker', name: 'Super Star', at: 250, color: '#c0c7d4' },
+  { id: 'mega', name: 'Mega Star', at: 1000, color: '#ffd400' },
 ];
 
 export default function StudioTab({ kid, onKid }) {
@@ -114,7 +114,7 @@ export default function StudioTab({ kid, onKid }) {
                       <rect x="24" y="48" width="12" height="14" fill={has ? t.color : 'rgba(255,255,255,.12)'} />
                       <rect x="14" y="62" width="32" height="10" rx="3" fill={has ? '#2a2a38' : 'rgba(255,255,255,.08)'} />
                     </svg>
-                    <span>{has ? t.name : `${t.at.toLocaleString()} followers`}</span>
+                    <span>{has ? t.name : `Earn ${t.at.toLocaleString()} Dobs`}</span>
                   </div>
                 );
               })}
@@ -132,7 +132,7 @@ export default function StudioTab({ kid, onKid }) {
             {kid.decor.includes('decor-rug') && <div className="rug" />}
           </div>
           <div className="room-stats">
-            <span>★ {kid.followers.toLocaleString()} followers</span>
+            <span>🟢 {(kid.dobsEarned || 0).toLocaleString()} Dobs earned</span>
             <span>🔥 best streak {kid.bestStreak}</span>
           </div>
           {shop.owned.some((id) => id.startsWith('decor-')) && (
@@ -216,7 +216,7 @@ export function ChannelTab({ kid }) {
         <div>
           <h1 className="hero-title small">{kid.channelName}</h1>
           <div className="muted-line">
-            ★ {kid.followers.toLocaleString()} followers · {data.videos.filter((v) => v.status === 'approved').length} videos
+            {data.videos.filter((v) => v.status === 'approved').length} videos
           </div>
         </div>
       </div>
@@ -239,7 +239,7 @@ export function ChannelTab({ kid }) {
 
 const TYPE_LABEL = {
   studio: 'Star Studio video', reading: 'Read a story', writing: 'Wrote a story', continue: 'Continued a story',
-  spelling: 'Spelling', 'maths-addition': 'Addition', 'maths-subtraction': 'Subtraction', 'maths-bonds': 'Number bonds',
+  award: 'Award from a friend 🏅', spelling: 'Spelling', 'maths-addition': 'Addition', 'maths-subtraction': 'Subtraction', 'maths-bonds': 'Number bonds',
   'maths-times': 'Times tables', buy: 'Shop', help: 'Word help', 'parent-good': 'Good behaviour 🌟',
   'parent-naughty': 'Naughty 😬', 'parent-spent': 'Spent at the shops 🛍️', 'parent-other': 'From a grown-up',
 };

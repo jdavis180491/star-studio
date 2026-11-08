@@ -122,8 +122,8 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal(day.briefs.star.title, 'Rocket Run');
   assert.equal(day.crew.name, 'Best Buds');
   const read = (await A.post('/api/kid/read', { briefTitle: 'Rocket Run', stats: { wordsRead: 30, totalWords: 34, helpedWords: ['launch'], keywords: ['rocket', 'planet', 'dinosaur'], keywordsRead: ['rocket', 'planet', 'dinosaur'], keywordsForced: [] } })).data;
-  assert.equal(read.gained.followers, 50);
-  assert.equal((await A.post('/api/kid/read', { stats: {} })).data.gained.followers, 0, 'once a day');
+  assert.equal(read.gained.dobs, 0, 'reading the script only unlocks the next step');
+  assert.equal((await A.post('/api/kid/read', { stats: {} })).data.already, true, 'once a day');
   await A.post('/api/kid/word', { result: { type: 'spell' } });
   const help = (await A.post('/api/kid/help', { word: 'launch' })).data;
   assert.equal(help.paid, false, 'word help is free by default');
@@ -166,9 +166,9 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   await waitFor(async () => (await A.get(`/api/kid/videos/${vid}`)).data.video.status === 'ready', 120000);
   assert.equal((await A.post(`/api/kid/videos/${vid}/remix`)).status, 409, 'only one remix');
 
-  // Post → followers; then B can't see it before approval/premiere
+  // Post → Dibbly Dobs (3 by default, doubled on a viral hit); then B can't see it before approval/premiere
   const posted = (await A.post(`/api/kid/videos/${vid}/post`)).data;
-  assert.ok(posted.gainedFollowers >= 100);
+  assert.equal(posted.gained.dobs, posted.viral ? 6 : 3);
   assert.equal(posted.streak, 1);
   assert.equal((await A.post('/api/kid/videos', { plan })).status, 409, 'one challenge a day');
 
@@ -203,13 +203,15 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal((await B.post('/api/kid/award', { videoId: vidB, award: 'funniest' })).status, 400);
   assert.equal((await B.post('/api/kid/award', { videoId: vid, award: 'funniest' })).status, 200);
   assert.equal((await B.post('/api/kid/award', { videoId: vid, award: 'dance' })).status, 409);
-  const league = (await B.get('/api/kid/crew')).data.league;
-  assert.equal(league.length, 2);
-  assert.ok(league[0].weekFollowers > 0);
+  assert.equal((await B.get('/api/kid/crew')).data.league, undefined, 'no separate Star Studio league any more');
+  const board = (await B.get('/api/kid/leaderboard')).data.rows;
+  assert.equal(board.length, 2);
+  const aRowBoard = board.find((r) => r.kidId === kidA.id);
+  assert.equal(aRowBoard.weekDobs, posted.gained.dobs + 1, 'video Dobs + 1 for the award');
 
   // Shop: buy, equip, decor; trophies
   const shopBefore = (await A.get('/api/kid/shop')).data;
-  assert.equal(shopBefore.dobs, 3, 'posting the daily video earned the default 3 Dibbly Dobs');
+  assert.equal(shopBefore.dobs, posted.gained.dobs + 1, 'video Dobs + the award Dob');
   const bought = await A.post('/api/kid/shop/buy', { itemId: 'hat-cap' });
   assert.equal(bought.status, 200);
   assert.equal(bought.data.dobs, shopBefore.dobs - 3);
@@ -217,7 +219,8 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal((await A.put('/api/kid/avatar', { avatar: { hat: 'crown' } })).data.avatar.hat, null, 'cannot wear unowned items');
   assert.equal((await A.post('/api/kid/shop/buy', { itemId: 'decor-disco' })).status, 402);
   const meA = (await A.get('/api/me')).data.kid;
-  assert.ok(meA.trophies.includes('rising'), 'trophy at 100 followers');
+  assert.deepEqual(meA.trophies, [], 'first trophy needs 50 Dobs earned');
+  assert.equal(meA.followers, undefined, 'followers are gone');
 
   // Stats for the parent
   const stats = (await A.get('/api/parent/stats')).data.kids[0];

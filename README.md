@@ -11,7 +11,7 @@ can add Dobs for good behaviour, take some away, or take off what they spend at 
 - 🐝 **Spelling**: five words for the year group (plus some of your weekly words), said aloud with a sentence. There's a hint after 2 tries, a bigger hint after 3, and then the option to give up.
 - 🔢 **Maths**: addition and subtraction (by year group), number bonds and times tables (you choose which), with five questions per set.
 
-Also: a Dibbly Dobs leaderboard (family and crew, resets Monday), an avatar and studio shop that costs Dobs, a Dob history, and Little Stars mode for younger children.
+Also: a Dibbly Dobs leaderboard (family and crew, resets Monday), trophies at 50 / 250 / 1,000 Dobs earned, an avatar and studio shop that costs Dobs, a Dob history, and Little Stars mode for younger children. Dibbly Dobs are the only points in the app.
 
 ---
 

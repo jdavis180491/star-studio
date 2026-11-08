@@ -35,4 +35,6 @@ All seven phases are built (pending real-iPad testing):
 - **Dibbly Dobs replace coins everywhere.** Grown-ups set what each activity is worth in the portal ("Dob values"), so children get them instantly. Star Studio: once a day; the others: every time.
 - Grown-ups see every Dob earned with what the child did, and can add (good), take away (naughty) or spend (shops).
 - Writing goes to siblings, crew friends or a grown-up. Anything going to another family is checked by the sender's grown-up first (the only free text between children, and it is always parent-checked).
-- Followers remain Star Studio's fun video score; the Dobs leaderboard covers family + crew, weekly.
+- **One currency:** Star Studio followers were retired. Viral hit = double Dobs, each unlock word said on camera = +1 Dob, receiving an award = +1 Dob.
+- **Trophies** go by Dobs ever earned (50 / 250 / 1,000), so spending never takes one away.
+- One leaderboard: Dibbly Dobs earned this week, family + crew, resets Monday.

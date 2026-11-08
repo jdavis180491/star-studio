@@ -248,7 +248,7 @@ function Kids({ status }) {
           <div className="grow">
             <h2>{k.channelName}</h2>
             <div className="muted">
-              {k.name} · {MODE_NAME[k.track]} · {status.yearGroups.find((y) => y.id === k.yearGroup)?.label} · {k.dobs} Dibbly Dobs · ★ {k.followers}
+              {k.name} · {MODE_NAME[k.track]} · {status.yearGroups.find((y) => y.id === k.yearGroup)?.label} · {k.dobs} Dibbly Dobs
             </div>
           </div>
           <button
@@ -1043,7 +1043,7 @@ function PracticeStats({ p }) {
 // ------------------------------------------------------------- Dibbly Dobs
 const TYPE_LABEL = {
   studio: 'Star Studio video', reading: 'Read a story aloud', writing: 'Wrote a story', continue: 'Continued a story',
-  spelling: 'Spelling set', 'maths-addition': 'Maths: addition', 'maths-subtraction': 'Maths: subtraction',
+  award: 'Award from a crew friend', spelling: 'Spelling set', 'maths-addition': 'Maths: addition', 'maths-subtraction': 'Maths: subtraction',
   'maths-bonds': 'Maths: number bonds', 'maths-times': 'Maths: times tables', buy: 'Bought in the app shop', help: 'Word help',
   'parent-good': 'Good behaviour', 'parent-naughty': 'Naughty', 'parent-spent': 'Spent at the shops', 'parent-other': 'Grown-up adjustment',
 };

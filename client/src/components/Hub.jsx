@@ -1,6 +1,5 @@
 import React from 'react';
 import Avatar from './Avatar.jsx';
-import { formatCount } from './Bits.jsx';
 import { DobPill, DobIcon } from './Dob.jsx';
 
 const NAV = [
@@ -10,7 +9,7 @@ const NAV = [
 ];
 
 // The frame around the kid's app: who's logged in, their Dibbly Dobs, and the tabs.
-export default function Hub({ kid, tab, onTab, onSwitch, children, showFollowers }) {
+export default function Hub({ kid, tab, onTab, onSwitch, children }) {
   return (
     <div className="hub">
       <header className="hub-top">
@@ -19,12 +18,6 @@ export default function Hub({ kid, tab, onTab, onSwitch, children, showFollowers
           <span className="hub-name">{kid.channelName}</span>
         </button>
         <div className="topbar-right">
-          {showFollowers && (
-            <div className="followers-pill" aria-label={`${kid.followers} followers`}>
-              <span className="fp-icon">★</span>
-              {formatCount(kid.followers)}
-            </div>
-          )}
           <DobPill dobs={kid.dobs} />
         </div>
       </header>

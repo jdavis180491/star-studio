@@ -229,6 +229,11 @@ const MIGRATIONS = [
     sentence TEXT NOT NULL
   );
   `,
+  // 4: one currency: followers retired; trophies count Dobs ever earned
+  `
+  ALTER TABLE kids ADD COLUMN IF NOT EXISTS dobs_earned INT NOT NULL DEFAULT 0;
+  UPDATE kids k SET dobs_earned = COALESCE((SELECT SUM(e.dobs) FROM events e WHERE e.kid_id = k.id AND e.dobs > 0), 0);
+  `,
 ];
 
 export async function migrate() {
