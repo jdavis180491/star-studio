@@ -41,14 +41,37 @@ test('typical speech-engine mistakes still unlock', () => {
   assert.ok(s.unlocked);
 });
 
-test('missing a keyword keeps filming locked even above 80%', () => {
+test('a missed keyword holds the reading there until it is said (or the say-it helper is used)', () => {
   const t = new ReadingTracker(sock.text, sock.keywords);
   t.ingest(1, sock.text.replace('because', 'cos'));
-  const s = t.snapshot();
-  assert.ok(s.progress >= 0.8);
+  let s = t.snapshot();
+  assert.equal(t.tokens[s.nextIndex].norm, 'because');
   assert.equal(s.unlocked, false);
-  assert.deepEqual(s.keywords.filter((k) => !k.done).map((k) => k.word), ['because']);
   t.forceKeyword('because');
+  t.ingest(2, 'monsters have super ears show us your best sneaky tiptoe then shout your big monster move');
+  s = t.snapshot();
+  assert.ok(s.unlocked);
+});
+
+test('skipping a word stops the tracker and flags the word until it is read', () => {
+  const t = new ReadingTracker('The big dragon was very hungry today.', []);
+  t.ingest(1, 'the big was very hungry');
+  let s = t.snapshot();
+  assert.equal(t.tokens[s.nextIndex].norm, 'dragon', 'still waiting for "dragon"');
+  assert.equal(s.stuck, s.nextIndex, 'flashes red');
+  assert.equal(s.status[3], 'unread', 'words after the skipped one are not counted');
+  assert.equal(s.unlocked, false);
+  t.ingest(2, 'dragon was very hungry today');
+  s = t.snapshot();
+  assert.equal(s.stuck, null);
+  assert.equal(s.unlocked, true);
+});
+
+test('word help on the next word counts it, but not on a word further on', () => {
+  const t = new ReadingTracker('Suddenly the gravity switches off.', []);
+  assert.equal(t.helpedWith(2), false, 'cannot skip ahead with help');
+  assert.equal(t.helpedWith(0), true);
+  t.ingest(1, 'the gravity switches off');
   assert.ok(t.snapshot().unlocked);
 });
 
@@ -69,6 +92,7 @@ test('reading only half does not unlock', () => {
 test('going back to re-read then carrying on', () => {
   const t = new ReadingTracker(gravity.text, gravity.keywords);
   t.ingest(1, 'suddenly gravity switches off in your bedroom your teddy your toys');
+  assert.equal(t.snapshot().stuck, null);
   t.ingest(2, 'your teddy your toys and even your snacks start to float away show us how you swim through the air to grab them then gravity comes back on what happens next');
   assert.ok(t.snapshot().unlocked);
 });

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReadingTracker, UNLOCK_RATIO } from '../reading/tracker.js';
+import { spokenWords, wordsMatch } from '../reading/words.js';
 import { createRecognizer, speechSupported } from '../speech/recognizer.js';
 import { speak } from '../speech/speak.js';
 import { formatCount } from './Bits.jsx';
@@ -9,7 +10,7 @@ import KeywordSheet from './KeywordSheet.jsx';
 import { api } from '../api.js';
 import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 
-import { unlockAudio, tick, keywordHit, greenlight } from '../sfx.js';
+import { unlockAudio, tick, keywordHit, greenlight, wrong } from '../sfx.js';
 import { say } from '../speech/say.js';
 
 const HYPE_CALLS = [
@@ -53,8 +54,13 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
   const comboRef = useRef(0);
   const comboTimer = useRef(null);
   const isLittle = brief.ageGroup === 'little';
-  // Little Stars: the Director reads the brief first, then it's their turn.
-  const [listenFirst, setListenFirst] = useState(isLittle ? 'ask' : 'done'); // ask | playing | done
+  // Young children and the daily brief: "I say it, you say it", one sentence at a time.
+  const echo = isLittle && !isStory;
+  const sentences = useMemo(() => tracker.sentences(), [tracker]);
+  const [echoAt, setEchoAt] = useState(0);
+  const [echoPhase, setEchoPhase] = useState(echo ? 'start' : 'off'); // start | saying | yours | done | off
+  // Young children reading a story: the Director can read it first.
+  const [listenFirst, setListenFirst] = useState(isLittle && !echo ? 'ask' : 'done'); // ask | playing | done
 
   const shout = useCallback((text) => {
     setCall({ text, id: Date.now() });
@@ -116,6 +122,16 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     };
   }, [tracker, celebrateWords]);
 
+  // Read past a word? Tell them to go back for the red one.
+  const lastStuck = useRef(null);
+  useEffect(() => {
+    if (snap.stuck != null && snap.stuck !== lastStuck.current) {
+      wrong();
+      shout(`Oops! Read “${tracker.tokens[snap.stuck].display.replace(/[^A-Za-z'’-]/g, '')}” first`);
+    }
+    lastStuck.current = snap.stuck;
+  }, [snap.stuck, shout, tracker]);
+
   // REC timecode while listening.
   useEffect(() => {
     if (mic !== 'listening') return undefined;
@@ -164,7 +180,11 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
   };
 
   // Word help is always free.
-  const markHelped = (norm) => setPaidWords((s) => new Set(s).add(norm));
+  // Using word help on the word they're stuck on lets them carry on from the next word.
+  const markHelped = (norm) => {
+    setPaidWords((s) => new Set(s).add(norm));
+    if (helpIndex != null && tracker.helpedWith(helpIndex)) setSnap(tracker.snapshot());
+  };
 
   const openKeyword = (word) => {
     unlockAudio();
@@ -211,6 +231,39 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     await say(brief.text);
     setListenFirst('done');
   };
+
+  // ---- "I say it, you say it"
+  const echoSay = async (i) => {
+    unlockAudio();
+    primeDirectorAudio();
+    recRef.current?.stop();
+    setEchoAt(i);
+    setEchoPhase('saying');
+    const text = sentences[i].map((x) => tracker.tokens[x].display).join(' ');
+    await say(text);
+    setEchoPhase('yours');
+    recRef.current?.start();
+  };
+  // When they've said most of the sentence back, move on to the next one.
+  useEffect(() => {
+    if (echoPhase !== 'yours') return;
+    const idx = sentences[echoAt];
+    const heard = spokenWords(snap.heard || '');
+    const want = idx.map((i) => tracker.tokens[i].norm);
+    const got = want.filter((w) => heard.some((h) => wordsMatch(w, h, { loose: w.length >= 4 }))).length;
+    const allLit = idx.every((i) => snap.status[i] !== 'unread');
+    if (allLit || got / want.length >= 0.6) {
+      tracker.completeSentence(idx);
+      setSnap(tracker.snapshot());
+      celebrateWords(idx);
+      if (echoAt + 1 < sentences.length) {
+        setEchoPhase('saying');
+        setTimeout(() => echoSay(echoAt + 1), 700);
+      } else {
+        setEchoPhase('done');
+      }
+    }
+  }, [snap.heard, snap.status, echoPhase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pct = Math.round(snap.progress * 100);
   const listening = mic === 'listening';
@@ -274,6 +327,8 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
                 s === 'filled' ? 'filled' : '',
                 paidWords.has(t.norm) ? 'helped' : '',
                 listening && i === snap.nextIndex ? 'next' : '',
+                i === snap.stuck ? 'stuck' : '',
+                echo && echoPhase !== 'start' && echoPhase !== 'done' ? (sentences[echoAt]?.includes(i) ? 'echo-now' : 'echo-dim') : '',
               ].join(' ');
               return (
                 <React.Fragment key={i}>
@@ -284,7 +339,7 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
               );
             })}
           </p>
-          {isLittle && listenFirst === 'done' && (
+          {isLittle && !echo && listenFirst === 'done' && (
             <button className="hear-btn" onClick={hearBrief}>
               🔊 Hear it first
             </button>
@@ -299,6 +354,31 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
         </div>
         {showHeard && <div className="heard">{snap.heard || '…'}</div>}
       </main>
+
+      {echo && echoPhase !== 'done' && (
+        <div className={`listen-first echo-panel ${echoPhase === 'start' ? '' : 'bar'}`}>
+          {echoPhase === 'start' && (
+            <button className="listen-btn" onClick={() => echoSay(0)}>
+              <span className="listen-icon">🔊</span>I say it, you say it!
+            </button>
+          )}
+          {echoPhase === 'saying' && (
+            <div className="echo-tag">
+              <span className="listen-icon">🎬</span> Listen…
+            </div>
+          )}
+          {echoPhase === 'yours' && (
+            <>
+              <div className="echo-tag yours">
+                <span className="listen-icon">🎤</span> Your turn! Say it back
+              </div>
+              <button className="big-btn ghost" onClick={() => echoSay(echoAt)}>
+                🔁 Say it again
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {isLittle && listenFirst !== 'done' && (
         <div className="listen-first">

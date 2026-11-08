@@ -72,12 +72,14 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   // ---------------- Reading (offline Story Buddy + offline story)
   let turn = (await A.post('/api/kid/story/turn', { history: [], plan: {} })).data;
   const history = [];
-  for (const said of ['a dragon called Zog', 'on the moon', 'he loses his roar']) {
-    history.push({ who: 'buddy', text: turn.say }, { who: 'kid', text: said });
+  const said = ['a dragon called Zog on the moon', 'he loses his roar'];
+  for (let i = 0; i < said.length; i++) {
+    assert.equal(turn.done, false, 'Story Buddy asks a question');
+    history.push({ who: 'buddy', text: turn.say }, { who: 'kid', text: said[i] });
     turn = (await A.post('/api/kid/story/turn', { history, plan: turn.plan })).data;
   }
-  assert.equal(turn.done, true);
-  assert.equal(turn.plan.hero, 'a dragon called Zog');
+  assert.equal(turn.done, true, 'two questions, then it writes the story');
+  assert.equal(turn.plan.hero, 'a dragon called Zog on the moon');
   const story = (await A.post('/api/kid/story/create', { ideas: turn.plan })).data.story;
   assert.match(story.text, /dragon called Zog/);
   assert.ok(story.keywords.length >= 1);
@@ -174,9 +176,9 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   assert.ok(easy.questions.every((q) => q.answer <= 10), 'maths follows its own level');
   kid = (await A.put(`/api/parent/kids/${a1.id}`, { levels: {} })).data.kid;
   assert.deepEqual(kid.levels, {}, 'back to following reading');
-  const said = (await A.post('/api/kid/say', { texts: ['dr', 'ag', 'on', 'dragon'] })).data;
-  assert.equal(said.lines.length, 4, 'word help is read in the app’s voice');
-  assert.ok(said.lines.every((l) => l.id));
+  const sayLines = (await A.post('/api/kid/say', { texts: ['dr', 'ag', 'on', 'dragon'] })).data;
+  assert.equal(sayLines.lines.length, 4, 'word help is read in the app’s voice');
+  assert.ok(sayLines.lines.every((l) => l.id));
 
   // ---------------- Phone notifications
   let n = (await A.get('/api/parent/notifications')).data;

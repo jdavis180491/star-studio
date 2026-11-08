@@ -74,7 +74,14 @@ export function learnRouter() {
         }
       }
       out ||= offlineBuddy(history, ideas);
-      if (history.filter((h) => h.who === 'kid').length >= 6 && !out.done) out = { ...out, say: `${out.say} Right, let’s write it!`, done: true };
+      // Exactly two questions: after the child's second answer, Story Buddy writes the story.
+      const replies = history.filter((h) => h.who === 'kid').length;
+      if (replies >= 2) {
+        const say = out.done ? out.say : `${out.say.replace(/[^.!]*\?\s*$/, '').trim() || 'Brilliant!'} I’m writing your story now!`;
+        out = { ...out, say, done: true };
+      } else if (out.done) {
+        out = { ...out, done: false };
+      }
       res.json({ ...out, line: registerLine(out.say, await voiceId(req.kid)) });
     } catch (e) {
       next(e);
@@ -397,15 +404,11 @@ function storyForClient(s) {
 function offlineBuddy(history, ideas) {
   const last = [...history].reverse().find((h) => h.who === 'kid')?.text?.trim() || '';
   const p = { ...ideas };
-  const asked = history.filter((h) => h.who !== 'kid').length;
-  if (asked === 0) return { say: 'Hello, storyteller! Let’s make a story. Who is the hero?', plan: p, done: false };
-  if (!p.hero) {
+  const replies = history.filter((h) => h.who === 'kid').length;
+  if (replies === 0) return { say: 'Hello, storyteller! Who is your story about, and where are they?', plan: p, done: false };
+  if (replies === 1) {
     p.hero = last || 'a brave little robot';
-    return { say: `Ooh, ${p.hero}! Where does the story happen?`, plan: p, done: false };
-  }
-  if (!p.place) {
-    p.place = last || 'a wobbly castle';
-    return { say: 'Great place! Uh oh, what goes wrong?', plan: p, done: false };
+    return { say: `Ooh, ${p.hero}! So what exciting thing happens?`, plan: p, done: false };
   }
   p.problem = last || 'everything turns to jelly';
   return { say: 'Brilliant! I’m writing your story now!', plan: p, done: true };

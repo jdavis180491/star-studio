@@ -1,144 +1,150 @@
-// Follows a child reading a brief aloud and lights words up, karaoke style.
+// Follows a child reading aloud and lights words up, karaoke style.
+//
+// Strict: every word must be read, in order. The next word to read stays "next" until the child
+// says it. If they read on past it, it flashes red ("stuck") until they go back and say it.
+// The only words we let through without hearing them are tiny ones ("a", "the", "to"…) that speech
+// engines often drop even when the child said them, and only when the words either side were read.
 //
 // How it works:
-//  - The speech engine gives us a growing transcript for each listening "session"
-//    (Safari restarts sessions whenever the child pauses).
-//  - Every time the transcript changes we re-walk it from where that session began,
-//    lining spoken words up with the brief's words. Lit words stay lit, so a
-//    speech engine changing its mind never "un-reads" a word.
-//  - Small skips are allowed. Bigger jumps (skipping a line, going back to re-read)
-//    need three words in a row to agree, so stray noise can't light up random words.
-//  - Tiny words like "a" / "the" that speech engines often drop are filled in
-//    when the words either side were read.
+//  - The speech engine gives a growing transcript for each listening "session" (Safari restarts
+//    sessions when the child pauses). Every time it changes we re-walk it from where that session
+//    began. Read words stay read, so the engine changing its mind never "un-reads" a word.
 
 import { tokenizeBrief, spokenWords, wordsMatch, normalizeWord, isKeywordForm } from './words.js';
 
-const LOOKAHEAD = 5;
-const SHORT_WORD = 3;
-export const UNLOCK_RATIO = 0.8;
+const LOOKAHEAD = 6;
+export const UNLOCK_RATIO = 1;
+// Tiny words speech engines often swallow. Never keywords.
+const FILLERS = new Set(['a', 'an', 'the', 'to', 'of', 'and', 'in', 'on', 'is', 'it', 'at', 'i', 'as', 'by', 'or', 'so', 'up', 'we', 'he', 'me', 'my', 'oh', 'be', 'for', 'was', 'are', 'you', 'your', 'its']);
 
 export class ReadingTracker {
   constructor(text, keywords = []) {
     this.tokens = tokenizeBrief(text);
     const kws = [...new Set(keywords.map(normalizeWord).filter(Boolean))];
-    for (const t of this.tokens) t.keyword = kws.find((k) => isKeywordForm(k, t.norm)) || null;
-    // Only keywords that actually appear in the brief are required.
+    for (const t of this.tokens) {
+      t.keyword = kws.find((k) => isKeywordForm(k, t.norm)) || null;
+      t.filler = !t.keyword && FILLERS.has(t.norm);
+    }
+    // Only keywords that actually appear in the text are required.
     this.keywords = kws.filter((k) => this.tokens.some((t) => t.keyword === k));
     this.status = this.tokens.map(() => 'unread'); // 'unread' | 'read' | 'filled'
     this.forced = new Set(); // keywords counted via the "say it" helper
     this.cursor = 0;
+    this.stuck = null; // index of a word they read past
     this.sessionKey = null;
     this.sessionStart = 0;
     this.heard = '';
-    // The last sentence must be read too, so filming never unlocks mid-read.
-    let start = 0;
-    for (let i = 0; i < this.tokens.length - 1; i++) {
-      if (/[.!?]["'’”)]*$/.test(this.tokens[i].display)) start = i + 1;
-    }
-    this.lastSentence = this.tokens.slice(start).map((t) => t.index);
   }
 
   endReached() {
-    const idx = this.lastSentence;
-    if (!idx.length) return true;
-    const read = idx.filter((i) => this.status[i] === 'read').length;
-    const done = idx.filter((i) => this.status[i] !== 'unread').length;
-    // Final word, or most of the last sentence, must have been heard.
-    return read > 0 && (this.status[idx[idx.length - 1]] === 'read' || done / idx.length >= 0.6);
+    return this.status.every((s) => s !== 'unread');
+  }
+
+  _skipDone(j) {
+    while (j < this.tokens.length && this.status[j] !== 'unread') j += 1;
+    return j;
   }
 
   /** Feed the full transcript of a listening session. Returns indices newly lit. */
   ingest(sessionKey, transcript) {
     if (sessionKey !== this.sessionKey) {
       this.sessionKey = sessionKey;
-      this.sessionStart = this.cursor;
+      this.sessionStart = this._skipDone(this.cursor);
     }
     this.heard = transcript;
     const words = spokenWords(transcript);
     const before = this.status.slice();
-    let cursor = this.sessionStart;
+    let cursor = this._skipDone(this.sessionStart);
+    let stuck = null;
     let k = 0;
-    while (k < words.length) {
-      const m = this._find(words, k, cursor);
+    while (k < words.length && cursor < this.tokens.length) {
+      const m = this._match(words, k, cursor);
       if (m) {
-        for (const i of m.indices) this.status[i] = 'read';
-        cursor = m.next;
+        for (const i of m.filled) this.status[i] = 'filled';
+        for (const i of m.read) this.status[i] = 'read';
+        cursor = this._skipDone(m.next);
         k += m.consumed;
+        stuck = null;
       } else {
+        if (this._ahead(words[k], cursor)) stuck = cursor;
         k += 1;
       }
     }
+    // Tiny words right at the end ("…catch it!") count once the word before them is read.
+    if (cursor > 0 && cursor < this.tokens.length && this.status[cursor - 1] === 'read' && this.tokens.slice(cursor).every((t) => t.filler)) {
+      for (let i = cursor; i < this.tokens.length; i++) if (this.status[i] === 'unread') this.status[i] = 'filled';
+      cursor = this.tokens.length;
+    }
     this.cursor = cursor;
-    this._fillGaps();
+    this.stuck = stuck !== null && this.status[stuck] === 'unread' ? stuck : null;
     const lit = [];
-    this.status.forEach((s, i) => {
-      if (s !== 'unread' && before[i] === 'unread') lit.push(i);
+    this.status.forEach((st, i) => {
+      if (st !== 'unread' && before[i] === 'unread') lit.push(i);
     });
     return lit;
   }
 
-  _find(w, k, cursor) {
+  // Only the next word counts. Up to two tiny filler words before it may be skipped over.
+  _match(w, k, cursor) {
     const T = this.tokens;
     const n = T.length;
-    for (let off = 0; off <= LOOKAHEAD; off++) {
-      const j = cursor + off;
-      if (j >= n) break;
-      if (wordsMatch(T[j].norm, w[k])) {
-        const confirmed =
-          off <= 1 || j === n - 1 || (k + 1 < w.length && wordsMatch(T[j + 1].norm, w[k + 1]));
-        if (confirmed) return { indices: [j], next: j + 1, consumed: 1 };
-      }
-      // Speech engine split one word in two ("sud den lee" for "suddenly").
+    const filled = [];
+    for (let j = cursor; j < n && filled.length <= 2; j++) {
+      if (this.status[j] !== 'unread') continue;
+      // Forgiving match: it's only ever compared with the one word we're waiting for.
+      if (wordsMatch(T[j].norm, w[k], { loose: !T[j].filler && T[j].norm.length >= 4 })) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
+      // Speech engine split one word in two ("sud den lee" for "suddenly")…
       if (k + 1 < w.length && wordsMatch(T[j].norm, w[k] + w[k + 1], { strict: true })) {
-        return { indices: [j], next: j + 1, consumed: 2 };
+        return { read: [j], filled: [...filled], next: j + 1, consumed: 2 };
       }
-      // ...or joined two words ("everyone" for "every one").
+      // …or joined two words ("everyone" for "every one").
       if (j + 1 < n && wordsMatch(T[j].norm + T[j + 1].norm, w[k], { strict: true })) {
-        return { indices: [j, j + 1], next: j + 2, consumed: 1 };
+        return { read: [j, j + 1], filled: [...filled], next: j + 2, consumed: 1 };
       }
-    }
-    // Big jump (skipped ahead, or went back to re-read): three words in a row must agree.
-    if (k + 2 < w.length) {
-      let best = -1;
-      let bestDist = Infinity;
-      for (let j = 0; j + 2 < n; j++) {
-        if (
-          wordsMatch(T[j].norm, w[k]) &&
-          wordsMatch(T[j + 1].norm, w[k + 1]) &&
-          wordsMatch(T[j + 2].norm, w[k + 2])
-        ) {
-          const d = Math.abs(j - cursor);
-          if (d < bestDist) {
-            best = j;
-            bestDist = d;
-          }
-        }
-      }
-      if (best >= 0) return { indices: [best, best + 1, best + 2], next: best + 3, consumed: 3 };
+      if (!T[j].filler) break; // a real word must be read before moving on
+      filled.push(j);
     }
     return null;
   }
 
-  _fillGaps() {
+  // Did they say a word further on (so they've skipped the next one)?
+  _ahead(word, cursor) {
+    if (!word || word.length < 3) return false;
     const T = this.tokens;
-    const n = T.length;
-    const fillable = (i) => this.status[i] === 'unread' && !T[i].keyword && T[i].norm.length <= SHORT_WORD;
-    let i = 0;
-    while (i < n) {
-      if (!fillable(i)) {
-        i += 1;
-        continue;
-      }
-      let j = i;
-      while (j < n && fillable(j)) j += 1;
-      const leftOk = i === 0 || this.status[i - 1] !== 'unread';
-      const rightOk = j === n || this.status[j] !== 'unread';
-      const hasNeighbour = (i > 0 && this.status[i - 1] !== 'unread') || (j < n && this.status[j] !== 'unread');
-      if (j - i <= 2 && leftOk && rightOk && hasNeighbour) {
-        for (let x = i; x < j; x++) this.status[x] = 'filled';
-      }
-      i = j;
+    for (let j = cursor + 1; j < Math.min(T.length, cursor + 1 + LOOKAHEAD); j++) {
+      if (!T[j].filler && this.status[j] === 'unread' && wordsMatch(T[j].norm, word)) return true;
     }
+    return false;
+  }
+
+  /** Sentences as lists of word indices (for "I say it, you say it"). */
+  sentences() {
+    const out = [[]];
+    this.tokens.forEach((t, i) => {
+      out[out.length - 1].push(i);
+      if (/[.!?]["'’”)]*$/.test(t.display) && i < this.tokens.length - 1) out.push([]);
+    });
+    return out.filter((s) => s.length);
+  }
+
+  /** Count a whole sentence as read (young children repeating it after the Director). */
+  completeSentence(indices) {
+    for (const i of indices) if (this.status[i] === 'unread') this.status[i] = 'read';
+    this.cursor = this._skipDone(Math.max(this.cursor, indices[indices.length - 1] + 1));
+    this.sessionKey = null;
+    this.sessionStart = this.cursor;
+    this.stuck = null;
+  }
+
+  /** Count the next word as read after the child used word help on it. */
+  helpedWith(index) {
+    if (index !== this._skipDone(this.cursor) || this.status[index] !== 'unread') return false;
+    this.status[index] = 'read';
+    this.cursor = this._skipDone(index + 1);
+    this.sessionStart = this.cursor;
+    this.sessionKey = null;
+    this.stuck = null;
+    return true;
   }
 
   /** Count a keyword as read (used by the one-word "say it" helper). */
@@ -156,8 +162,8 @@ export class ReadingTracker {
 
   /** The next word we expect, for the bouncing "you are here" marker. */
   nextIndex() {
-    for (let i = this.cursor; i < this.tokens.length; i++) if (this.status[i] === 'unread') return i;
-    return this.status.indexOf('unread');
+    const i = this._skipDone(this.cursor);
+    return i < this.tokens.length ? i : this.status.indexOf('unread');
   }
 
   snapshot() {
@@ -172,6 +178,7 @@ export class ReadingTracker {
       total: this.tokens.length,
       keywords,
       nextIndex: this.nextIndex(),
+      stuck: this.stuck,
       endReached: this.endReached(),
       unlocked: progress >= UNLOCK_RATIO && keywords.every((k) => k.done) && this.endReached(),
       heard: this.heard,

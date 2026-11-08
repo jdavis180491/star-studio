@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
 import { DobsLogo as Logo } from './Dob.jsx';
@@ -11,14 +11,23 @@ export default function KidPicker({ kids, onIn }) {
   const [error, setError] = useState(null);
   const [shake, setShake] = useState(false);
 
+  // The code lives in a ref too, so quick taps never read an out-of-date value (no lost digits).
+  const pinRef = useRef('');
+  const busy = useRef(false);
+  const setBoth = (v) => {
+    pinRef.current = v;
+    setPin(v);
+  };
+
   const press = async (d) => {
     unlockAudio();
-    if (pin.length >= 4) return;
-    tick(pin.length);
-    const next = pin + d;
-    setPin(next);
+    if (busy.current || pinRef.current.length >= 4) return;
+    tick(pinRef.current.length);
+    const next = pinRef.current + d;
+    setBoth(next);
     setError(null);
     if (next.length === 4) {
+      busy.current = true;
       try {
         const out = await api.post('/api/kid/login', { kidId: kid.id, pin: next });
         onIn(out.kid);
@@ -28,10 +37,21 @@ export default function KidPicker({ kids, onIn }) {
         setShake(true);
         setTimeout(() => {
           setShake(false);
-          setPin('');
+          setBoth('');
+          busy.current = false;
         }, 450);
       }
     }
+  };
+
+  const back = () => {
+    if (!busy.current) setBoth(pinRef.current.slice(0, -1));
+  };
+  const pickKid = (k) => {
+    setBoth('');
+    setError(null);
+    busy.current = false;
+    setKid(k);
   };
 
   if (!kids.length) {
@@ -60,7 +80,7 @@ export default function KidPicker({ kids, onIn }) {
           <h1 className="hero-title small">Who’s playing?</h1>
           <div className="picker-grid">
             {kids.map((k) => (
-              <button key={k.id} className="picker-kid" onClick={() => setKid(k)}>
+              <button key={k.id} className="picker-kid" onClick={() => pickKid(k)}>
                 <Avatar avatar={k.avatar} size={140} ring />
                 <span>{k.channelName}</span>
               </button>
@@ -69,7 +89,7 @@ export default function KidPicker({ kids, onIn }) {
         </main>
       ) : (
         <main className="picker-main">
-          <button className="picker-kid selected" onClick={() => setKid(null)}>
+          <button className="picker-kid selected" onClick={() => pickKid(null)}>
             <Avatar avatar={kid.avatar} size={120} ring />
             <span>{kid.channelName}</span>
           </button>
@@ -85,11 +105,11 @@ export default function KidPicker({ kids, onIn }) {
                 {d}
               </button>
             ))}
-            <button className="ghost" onClick={() => setPin((p) => p.slice(0, -1))} aria-label="Delete">
+            <button className="ghost" onClick={back} aria-label="Delete">
               ⌫
             </button>
             <button onClick={() => press('0')}>0</button>
-            <button className="ghost" onClick={() => setKid(null)} aria-label="Back">
+            <button className="ghost" onClick={() => pickKid(null)} aria-label="Back">
               ←
             </button>
           </div>
