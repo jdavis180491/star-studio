@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, uploadVideo } from '../api.js';
-import { formatCount } from './Bits.jsx';
 import { greenlight, coin } from '../sfx.js';
 
 const STEPS = ['Adding the intro…', 'Cutting your best bits…', 'Dropping the beat…', 'Writing captions…', 'Adding special effects…', 'Polishing…'];
-const TROPHY_NAMES = { rising: 'Rising Star', hitmaker: 'Hit Maker', mega: 'Mega Star' };
+const TROPHY_NAMES = { rising: 'Rising Star', hitmaker: 'Super Star', mega: 'Mega Star' };
 
 // Upload → the server edits (intro, captions, effects, music, sing-along) → watch → remix (once) → post.
 export default function EditSuite({ brief, plan, take, existing, title, track, onDone, onRetake }) {
@@ -135,23 +134,17 @@ export default function EditSuite({ brief, plan, take, existing, title, track, o
 
         {phase === 'posted' && result && (
           <div className="posted">
-            {result.viral && <div className="viral-badge">🔥 VIRAL HIT · DOUBLE FOLLOWERS</div>}
+            {result.viral && <div className="viral-badge">🔥 VIRAL HIT · DOUBLE DIBBLY DOBS</div>}
             <h1 className="gl-title">POSTED!</h1>
             <div className="stat-row">
-              <div className="stat">
-                <div className="stat-num">+{formatCount(result.gainedFollowers)}</div>
-                <div className="stat-label">followers</div>
-              </div>
               <div className="stat">
                 <div className="stat-num">{result.streak}🔥</div>
                 <div className="stat-label">day streak</div>
               </div>
-              {result.gained?.dobs > 0 && (
-                <div className="stat">
-                  <div className="stat-num">+{result.gained.dobs}</div>
-                  <div className="stat-label">Dibbly Dobs</div>
-                </div>
-              )}
+              <div className="stat">
+                <div className="stat-num">+{result.gained?.dobs || 0}</div>
+                <div className="stat-label">Dibbly Dobs</div>
+              </div>
               {result.keywordsSaid?.length > 0 && (
                 <div className="stat">
                   <div className="stat-num">{result.keywordsSaid.length}</div>

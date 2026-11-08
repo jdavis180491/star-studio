@@ -176,3 +176,30 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   assert.equal(ps.writing, 2);
   assert.deepEqual(ps.mathsSettings.timesTables, [7]);
 });
+
+test('trophies count Dobs ever earned, so spending never takes one away', { skip: !DB, timeout: 60000 }, async () => {
+  const { tx, one } = await import('../server/db.js');
+  const { grant } = await import('../server/lib/rewards.js');
+  const dbName = `ddtrophy_${Date.now()}`;
+  execFileSync('psql', [DB, '-q', '-c', `CREATE DATABASE ${dbName}`]);
+  process.env.DATABASE_URL = DB.replace(/\/[^/?]+(\?|$)/, `/${dbName}$1`);
+  try {
+    const { migrate, getPool } = await import('../server/db.js');
+    await migrate();
+    const fam = await one(`INSERT INTO families (email, password_hash, consent_at) VALUES ('t@t.t','x',now()) RETURNING id`);
+    const kid = await one(`INSERT INTO kids (family_id, name, channel_name, pin_hash) VALUES ($1,'T','T TV','x') RETURNING id`, [fam.id]);
+    let r = await tx((c) => grant(c, kid.id, 'reading', { dobs: 49 }));
+    assert.deepEqual(r.newTrophies, []);
+    r = await tx((c) => grant(c, kid.id, 'reading', { dobs: 2 }));
+    assert.deepEqual(r.newTrophies, ['rising']);
+    r = await tx((c) => grant(c, kid.id, 'parent-spent', { dobs: -40 }));
+    assert.equal(r.dobs, 11);
+    const k = await one(`SELECT dobs_earned FROM kids WHERE id = $1`, [kid.id]);
+    assert.equal(k.dobs_earned, 51, 'spending does not reduce Dobs earned');
+    r = await tx((c) => grant(c, kid.id, 'reading', { dobs: 1 }));
+    assert.deepEqual(r.newTrophies, [], 'no repeat trophy after spending');
+    await getPool().end();
+  } finally {
+    execFileSync('psql', [DB, '-q', '-c', `DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`]);
+  }
+});

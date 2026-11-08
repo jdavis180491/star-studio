@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
-import { formatCount } from './Bits.jsx';
 
 // Premiere feed (revealed together when everyone has posted, or at 6pm),
-// sticker reactions, awards, the weekly league and Friday's Premiere Night.
+// sticker reactions, awards and Friday's Premiere Night.
 export default function CrewTab({ kid }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -104,20 +103,6 @@ export default function CrewTab({ kid }) {
         ))}
       </div>
 
-      {data.league.length > 1 && (
-        <section className="league">
-          <h2>This week’s league</h2>
-          {data.league.map((l, i) => (
-            <div key={l.kidId} className={`league-row ${l.kidId === kid.id ? 'me' : ''}`}>
-              <span className="pos">{i + 1}</span>
-              <Avatar avatar={l.avatar} size={36} />
-              <span className="league-name">{l.channelName}</span>
-              <span className="league-score">+{formatCount(l.weekFollowers)}</span>
-            </div>
-          ))}
-          <div className="muted-line">Resets every Monday</div>
-        </section>
-      )}
 
       {data.premiereNight.available && (
         <section className="premiere-night">

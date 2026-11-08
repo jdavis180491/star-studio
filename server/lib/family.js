@@ -25,14 +25,14 @@ export function publicKid(k, { self = false } = {}) {
     channelName: k.channel_name,
     avatar: k.avatar,
     track: k.track,
-    followers: k.followers,
-    trophies: trophiesFor(k.followers),
+    trophies: trophiesFor(k.dobs_earned || 0),
   };
   if (!self) return base;
   return {
     ...base,
     yearGroup: k.year_group,
     dobs: k.dobs,
+    dobsEarned: k.dobs_earned || 0,
     settings: k.settings,
     streak: k.streak,
     bestStreak: k.best_streak,

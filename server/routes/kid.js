@@ -7,7 +7,7 @@ import { requireKid, requireDevice } from '../auth.js';
 import { dayISO, weekStartISO, weekday, localHour, PREMIERE_HOUR } from '../lib/dates.js';
 import { briefForKids } from '../lib/briefs.js';
 import { scopeForKid, crewForKid, scopeMembers, publicKid, familySettings } from '../lib/family.js';
-import { grant, grantDaily, spend, nextStreak, league, rulesForKid, REWARDS, VIRAL_CHANCE } from '../lib/rewards.js';
+import { grant, markDaily, spend, nextStreak, rulesForKid, BONUS, VIRAL_CHANCE } from '../lib/rewards.js';
 import { SHOP, STICKERS, AWARDS, cleanAvatar } from '../lib/catalog.js';
 import { premiereState, videoForClient } from '../lib/videos.js';
 import { rateLimit } from '../lib/rateLimit.js';
@@ -84,7 +84,7 @@ export function kidRouter() {
         [req.kid.id, String(req.body?.briefTitle || '').slice(0, 80), Math.max(0, Number(s.wordsRead) || 0), Math.max(0, Number(s.totalWords) || 0),
           JSON.stringify(list(s.helpedWords)), JSON.stringify(list(s.keywords)), JSON.stringify(list(s.keywordsRead)), JSON.stringify(list(s.keywordsForced)), Boolean(s.grownUpSkip)]
       );
-      res.json(await grantDaily(req.kid.id, 'read'));
+      res.json(await markDaily(req.kid.id, 'read'));
     } catch (e) {
       next(e);
     }
@@ -92,7 +92,7 @@ export function kidRouter() {
 
   r.post('/kid/word', async (req, res, next) => {
     try {
-      res.json(await grantDaily(req.kid.id, 'word', { result: req.body?.result || {} }));
+      res.json(await markDaily(req.kid.id, 'word', { result: req.body?.result || {} }));
     } catch (e) {
       next(e);
     }
@@ -213,7 +213,7 @@ export function kidRouter() {
     }
   });
 
-  // Post = send for the grown-up's approval. Followers are earned now.
+  // Post = send for the grown-up's approval. Dibbly Dobs are earned now.
   r.post('/kid/videos/:id/post', async (req, res, next) => {
     try {
       const out = await tx(async (c) => {
@@ -224,14 +224,15 @@ export function kidRouter() {
         if (dup) return { status: 409, body: { error: 'Already posted today' } };
         const viral = Math.random() < VIRAL_CHANCE;
         const kws = (v.keywords_said || []).slice(0, 3);
-        const followers = REWARDS.post.followers * (viral ? 2 : 1) + kws.length * REWARDS.keyword.followers;
+        const rules = await rulesForKid(v.kid_id);
+        const dobs = rules.studio * (viral ? 2 : 1) + kws.length * BONUS.keyword;
         const k = (await c.query(`SELECT last_post_date, streak, best_streak FROM kids WHERE id = $1 FOR UPDATE`, [v.kid_id])).rows[0];
         const streak = nextStreak(k.last_post_date, k.streak);
         await c.query(`UPDATE kids SET streak = $2, best_streak = GREATEST(best_streak, $2), last_post_date = $3 WHERE id = $1`, [v.kid_id, streak, dayISO()]);
-        const rules = await rulesForKid(v.kid_id);
-        const g = await grant(c, v.kid_id, 'studio', { followers, dobs: rules.studio, meta: { what: `Posted “${v.title || v.brief?.title}”`, video: v.id, viral, keywords: kws } });
-        await c.query(`UPDATE videos SET status = 'submitted', submitted_at = now(), viral = $2, followers_awarded = $3 WHERE id = $1`, [v.id, viral, followers]);
-        return { status: 200, body: { ...g, viral, keywordsSaid: kws, streak, gainedFollowers: followers } };
+        const what = `Posted “${v.title || v.brief?.title}”${viral ? ' (viral hit: double Dobs!)' : ''}${kws.length ? ` + said ${kws.length} unlock word${kws.length > 1 ? 's' : ''} on camera` : ''}`;
+        const g = await grant(c, v.kid_id, 'studio', { dobs, meta: { what, video: v.id, viral, keywords: kws } });
+        await c.query(`UPDATE videos SET status = 'submitted', submitted_at = now(), viral = $2, followers_awarded = $3 WHERE id = $1`, [v.id, viral, dobs]);
+        return { status: 200, body: { ...g, viral, keywordsSaid: kws, streak } };
       });
       res.status(out.status).json(out.body);
     } catch (e) {
@@ -287,7 +288,7 @@ export function kidRouter() {
     }
   });
 
-  // ---------------------------------------------------------------- crew: premiere, reactions, awards, league
+  // ---------------------------------------------------------------- crew: premiere, reactions, awards
   r.get('/kid/crew', async (req, res, next) => {
     try {
       const kid = req.kid;
@@ -329,7 +330,6 @@ export function kidRouter() {
         stickers: STICKERS,
         awardTypes: AWARDS,
         myAward: awards.find((a) => a.from_kid === kid.id) || null,
-        league: (await league(members.map((m) => m.id))).map((l) => ({ kidId: l.id, channelName: l.channel_name, avatar: l.avatar, weekFollowers: l.week_followers })),
         premiereNight: {
           available: Boolean(crew) && (wd === 5 || wd === 6 || wd === 0),
           status: reel?.status || null,
@@ -372,7 +372,8 @@ export function kidRouter() {
           [scope, dayISO(), req.kid.id, v.kid_id, v.id, award]
         );
         if (!ins.rowCount) return null;
-        await grant(c, v.kid_id, 'award', { ...REWARDS.award, meta: { award, from: req.kid.id } });
+        const name = AWARDS.find((a) => a.id === award)?.name;
+        await grant(c, v.kid_id, 'award', { dobs: BONUS.award, meta: { award, from: req.kid.id, what: `Won “${name}” from ${req.kid.channel_name}` } });
         return true;
       });
       if (!out) return res.status(409).json({ error: "You've already given today's award" });

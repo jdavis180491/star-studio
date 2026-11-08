@@ -38,10 +38,10 @@ test('league week starts on Monday', () => {
   assert.equal(addDays('2026-11-30', 1), '2026-12-01');
 });
 
-test('trophies at 100 / 1,000 / 10,000 followers', () => {
-  assert.deepEqual(trophiesFor(99), []);
-  assert.deepEqual(trophiesFor(100), ['rising']);
-  assert.deepEqual(trophiesFor(12000), ['rising', 'hitmaker', 'mega']);
+test('trophies at 50 / 250 / 1,000 Dobs earned', () => {
+  assert.deepEqual(trophiesFor(49), []);
+  assert.deepEqual(trophiesFor(50), ['rising']);
+  assert.deepEqual(trophiesFor(1200), ['rising', 'hitmaker', 'mega']);
 });
 
 test('avatars only wear owned items', () => {

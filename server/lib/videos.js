@@ -63,7 +63,7 @@ export function videoForClient(v, { owner = false } = {}) {
       remixesLeft: Math.max(0, 1 - v.remixes),
       renderError: v.render_error,
       keywordsSaid: v.keywords_said,
-      followersAwarded: v.followers_awarded,
+      dobsAwarded: v.followers_awarded,
     });
   }
   return out;

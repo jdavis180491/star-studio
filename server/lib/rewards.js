@@ -1,5 +1,5 @@
-// Dibbly Dobs (the reward children earn, spend, and grown-ups manage),
-// followers (Star Studio's fun video score), trophies and the forgiving streak.
+// Dibbly Dobs (the one reward children earn, spend, and grown-ups manage),
+// trophies (by Dobs ever earned) and the forgiving streak.
 import { tx, one, many } from '../db.js';
 import { TROPHIES } from './catalog.js';
 import { dayISO, addDays, weekStartISO } from './dates.js';
@@ -29,35 +29,32 @@ export async function rulesForKid(kidId) {
   return dobRules(f?.settings || {});
 }
 
-// Star Studio followers (the creator score) per step.
-export const REWARDS = {
-  read: { followers: 50 },
-  word: { followers: 20 },
-  post: { followers: 100 },
-  keyword: { followers: 30 }, // each unlock word said on camera
-  award: { followers: 25 },
+// Star Studio extras, in Dobs (on top of the grown-up's value for posting).
+export const BONUS = {
+  keyword: 1, // each unlock word said on camera (max 3)
+  award: 1, // receiving an award from a crew friend
 };
-export const VIRAL_CHANCE = 1 / 6;
+export const VIRAL_CHANCE = 1 / 6; // viral hit = double Dobs for that video
 
 /**
- * Record an event and add followers / Dobs inside a transaction.
+ * Record an event and add (or take away) Dobs inside a transaction.
  * `meta` says what they did (shown to grown-ups). Returns the new totals.
  */
-export async function grant(client, kidId, type, { followers = 0, dobs = 0, meta = {}, note = null, byParent = false } = {}) {
-  const before = (await client.query(`SELECT followers FROM kids WHERE id = $1 FOR UPDATE`, [kidId])).rows[0];
+export async function grant(client, kidId, type, { dobs = 0, meta = {}, note = null, byParent = false } = {}) {
+  const before = (await client.query(`SELECT dobs_earned FROM kids WHERE id = $1 FOR UPDATE`, [kidId])).rows[0];
   if (!before) throw new Error('kid not found');
   await client.query(
-    `INSERT INTO events (kid_id, type, followers, dobs, meta, note, by_parent, event_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [kidId, type, followers, dobs, meta, note, byParent, dayISO()]
+    `INSERT INTO events (kid_id, type, dobs, meta, note, by_parent, event_date) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [kidId, type, dobs, meta, note, byParent, dayISO()]
   );
   const after = (
     await client.query(
-      `UPDATE kids SET followers = followers + $2, dobs = GREATEST(0, dobs + $3) WHERE id = $1 RETURNING followers, dobs`,
-      [kidId, followers, dobs]
+      `UPDATE kids SET dobs = GREATEST(0, dobs + $2), dobs_earned = dobs_earned + GREATEST($2, 0) WHERE id = $1 RETURNING dobs, dobs_earned`,
+      [kidId, dobs]
     )
   ).rows[0];
-  const newTrophies = TROPHIES.filter((t) => before.followers < t.at && after.followers >= t.at).map((t) => t.id);
-  return { followers: after.followers, dobs: after.dobs, gained: { followers, dobs }, newTrophies };
+  const newTrophies = TROPHIES.filter((t) => before.dobs_earned < t.at && after.dobs_earned >= t.at).map((t) => t.id);
+  return { dobs: after.dobs, gained: { dobs }, newTrophies };
 }
 
 /** Give the Dobs a grown-up set for this activity. */
@@ -71,15 +68,15 @@ export async function alreadyToday(kidId, type) {
   return Boolean(await one(`SELECT 1 FROM events WHERE kid_id = $1 AND type = $2 AND event_date = $3`, [kidId, type, dayISO()]));
 }
 
-/** Once-a-day Star Studio steps (reading the script, the word moment): followers only. */
-export async function grantDaily(kidId, type, meta = {}) {
+/** Mark a once-a-day Star Studio step (reading the script, the word moment) as done. */
+export async function markDaily(kidId, type, meta = {}) {
   return tx(async (c) => {
     const done = (await c.query(`SELECT 1 FROM events WHERE kid_id = $1 AND type = $2 AND event_date = $3`, [kidId, type, dayISO()])).rows[0];
     if (done) {
-      const k = (await c.query(`SELECT followers, dobs FROM kids WHERE id = $1`, [kidId])).rows[0];
-      return { ...k, gained: { followers: 0, dobs: 0 }, newTrophies: [], already: true };
+      const k = (await c.query(`SELECT dobs FROM kids WHERE id = $1`, [kidId])).rows[0];
+      return { ...k, gained: { dobs: 0 }, newTrophies: [], already: true };
     }
-    return grant(c, kidId, type, { ...REWARDS[type], meta });
+    return grant(c, kidId, type, { meta });
   });
 }
 
@@ -97,17 +94,6 @@ export async function spend(kidId, amount, type, meta = {}) {
     if (!k || k.dobs < amount) return null;
     return grant(c, kidId, type, { dobs: -amount, meta });
   });
-}
-
-/** Star Studio weekly league: followers earned since Monday. */
-export async function league(memberIds) {
-  if (!memberIds.length) return [];
-  return many(
-    `SELECT k.id, k.channel_name, k.avatar, COALESCE(SUM(e.followers), 0)::int AS week_followers
-       FROM kids k LEFT JOIN events e ON e.kid_id = k.id AND e.event_date >= $2
-      WHERE k.id = ANY($1) GROUP BY k.id ORDER BY week_followers DESC, k.id`,
-    [memberIds, weekStartISO()]
-  );
 }
 
 /** Dibbly Dobs leaderboard: Dobs earned this week (not counting spending), plus balances. */

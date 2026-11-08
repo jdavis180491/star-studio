@@ -33,7 +33,6 @@ const kidForParent = (k) => ({
   track: k.track,
   yearGroup: k.year_group,
   avatar: k.avatar,
-  followers: k.followers,
   dobs: k.dobs,
   settings: k.settings,
   streak: k.streak,
