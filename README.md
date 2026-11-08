@@ -26,13 +26,15 @@ Also: a Dibbly Dobs leaderboard (family and crew, resets Monday), trophies at 50
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys | For Story Buddy, stories, spell check, spelling sentences, Star Studio briefs, the Director and the edits |
 | `ELEVENLABS_API_KEY` | elevenlabs.io → API Keys (needs a paid plan from Replit's servers) | For the Director, Story Buddy and spelling voice |
 | `OPENAI_API_KEY` | platform.openai.com → API Keys | Optional: rewards unlock words said on camera, and times captions to speech |
+| `OBJECT_STORAGE_BUCKET_ID` | The Bucket ID from Replit's App Storage | **Yes** for videos to be kept |
 | `ADMIN_EMAILS` | The email(s) of the app's admin(s), separated by commas | Shows the **Daily briefs** tab to those accounts only |
 
 `PARENT_PASSCODE` is no longer used (each parent has their own account now). You can delete it.
 
 ### App Storage (for videos)
-In Replit, open **Object Storage / App Storage** and create a bucket. Videos are then stored privately and survive restarts.
-Without it, videos are kept on the server's temporary disk and can disappear.
+In Replit, open **Object Storage / App Storage** and create a bucket. Copy its **Bucket ID** and add it as the secret
+`OBJECT_STORAGE_BUCKET_ID` (Secrets survive updates; the `.replit` file is reset by each update). Videos are then stored privately
+and survive restarts. Without it, videos are kept on the server's temporary disk and can disappear.
 
 ### Daily briefs and keywords
 - **One brief a day, the same for everyone**: an older version (7 and above) and a young version (5 and below) of the same idea.

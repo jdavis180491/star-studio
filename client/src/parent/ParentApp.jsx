@@ -71,7 +71,9 @@ export default function ParentApp() {
       <div className="status-row">
         {!status.claude && <Pill label="AI is off: add ANTHROPIC_API_KEY" />}
         {!status.voice && <Pill label="Voice is off: add ELEVENLABS_API_KEY" />}
-        {status.storage !== 'replit' && <Pill label="Videos on temporary disk: switch on App Storage" />}
+        {status.storage !== 'replit' && (
+          <Pill label={`Videos on temporary disk: add the OBJECT_STORAGE_BUCKET_ID secret${status.storageProblem && !/No storage bucket set/.test(status.storageProblem) ? ` (${status.storageProblem.slice(0, 120)})` : ''}`} />
+        )}
       </div>
       )}
 
