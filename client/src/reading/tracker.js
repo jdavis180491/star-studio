@@ -10,7 +10,15 @@
 //    sessions when the child pauses). Every time it changes we re-walk it from where that session
 //    began. Read words stay read, so the engine changing its mind never "un-reads" a word.
 
-import { tokenizeBrief, spokenWords, wordsMatch, normalizeWord, isKeywordForm } from './words.js';
+import { tokenizeBrief, spokenWords, wordsMatch, normalizeWord, isKeywordForm, levenshtein, soundKey } from './words.js';
+
+// A child's attempt that's close to the word (the speech engine often mishears children).
+function closeTry(target, spoken) {
+  if (!spoken || spoken.length < 2) return false;
+  if (soundKey(target) === soundKey(spoken)) return true;
+  if (target[0] !== spoken[0]) return false;
+  return levenshtein(target, spoken) <= Math.ceil(target.length / 2);
+}
 
 const LOOKAHEAD = 6;
 export const UNLOCK_RATIO = 1;
@@ -31,6 +39,9 @@ export class ReadingTracker {
     this.forced = new Set(); // keywords counted via the "say it" helper
     this.cursor = 0;
     this.stuck = null; // index of a word they read past
+    this.missCursor = null; // the word they're trying to say…
+    this.misses = new Map(); // …and what the engine heard instead
+    this.needsHelp = null; // after 3 tries, word help pops up
     this.sessionKey = null;
     this.sessionStart = 0;
     this.heard = '';
@@ -65,8 +76,22 @@ export class ReadingTracker {
         cursor = this._skipDone(m.next);
         k += m.consumed;
         stuck = null;
+      } else if (this._ahead(words[k], cursor)) {
+        stuck = cursor;
+        k += 1;
       } else {
-        if (this._ahead(words[k], cursor)) stuck = cursor;
+        // An attempt at the word that wasn't recognised. Two close tries count it.
+        if (cursor !== this.missCursor) {
+          this.missCursor = cursor;
+          this.misses = new Map();
+        }
+        this.misses.set(`${sessionKey}:${k}`, words[k]);
+        const close = [...this.misses.values()].filter((w) => closeTry(this.tokens[cursor].norm, w)).length;
+        if (close >= 2 && !this.tokens[cursor].filler) {
+          this.status[cursor] = 'read';
+          cursor = this._skipDone(cursor + 1);
+          stuck = null;
+        }
         k += 1;
       }
     }
@@ -76,6 +101,11 @@ export class ReadingTracker {
       cursor = this.tokens.length;
     }
     this.cursor = cursor;
+    if (this.missCursor !== null && this.missCursor !== this._skipDone(cursor)) {
+      this.missCursor = null;
+      this.misses = new Map();
+    }
+    this.needsHelp = this.missCursor !== null && this.misses.size >= 3 && this.status[this.missCursor] === 'unread' ? this.missCursor : null;
     this.stuck = stuck !== null && this.status[stuck] === 'unread' ? stuck : null;
     const lit = [];
     this.status.forEach((st, i) => {
@@ -144,6 +174,9 @@ export class ReadingTracker {
     this.sessionStart = this.cursor;
     this.sessionKey = null;
     this.stuck = null;
+    this.missCursor = null;
+    this.misses = new Map();
+    this.needsHelp = null;
     return true;
   }
 
@@ -179,6 +212,7 @@ export class ReadingTracker {
       keywords,
       nextIndex: this.nextIndex(),
       stuck: this.stuck,
+      needsHelp: this.needsHelp,
       endReached: this.endReached(),
       unlocked: progress >= UNLOCK_RATIO && keywords.every((k) => k.done) && this.endReached(),
       heard: this.heard,

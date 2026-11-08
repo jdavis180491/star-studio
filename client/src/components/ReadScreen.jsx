@@ -108,8 +108,13 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     const rec = createRecognizer({ lang: 'en-GB' });
     recRef.current = rec;
     const offs = [
-      rec.on('transcript', ({ text, sessionId }) => {
-        const lit = tracker.ingest(sessionId, text);
+      rec.on('transcript', ({ text, sessionId, alternatives = [] }) => {
+        let lit = tracker.ingest(sessionId, text);
+        // Misheard? Try the speech engine's other guesses for the same words.
+        for (const alt of alternatives) {
+          if (lit.length) break;
+          lit = tracker.ingest(sessionId, alt);
+        }
         setSnap(tracker.snapshot());
         if (lit.length) celebrateWords(lit);
       }),
@@ -121,6 +126,16 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
       clearTimeout(comboTimer.current);
     };
   }, [tracker, celebrateWords]);
+
+  // Three tries and the word still isn't heard: word help pops up to sound it out (and then it counts).
+  const helped = useRef(new Set());
+  useEffect(() => {
+    const i = snap.needsHelp;
+    if (i == null || helped.current.has(i) || helpIndex != null) return;
+    helped.current.add(i);
+    shout('Let’s sound it out!');
+    openHelp(i); // eslint-disable-line no-use-before-define
+  }, [snap.needsHelp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Read past a word? Tell them to go back for the red one.
   const lastStuck = useRef(null);
@@ -199,11 +214,11 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     setSnap(tracker.snapshot());
   };
 
-  // Grown-up skip: hold the locked Film button for 2 seconds.
+  // Grown-up skip: hold the locked Film button for 5 seconds (long enough that a child resting a finger won't).
   const holdTimer = useRef(null);
   const startHold = () => {
     if (unlocked) return;
-    holdTimer.current = setTimeout(() => setGrownUpSkip(true), 2000);
+    holdTimer.current = setTimeout(() => setGrownUpSkip(true), 5000);
   };
   const endHold = () => clearTimeout(holdTimer.current);
 
@@ -252,7 +267,9 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     const want = idx.map((i) => tracker.tokens[i].norm);
     const got = want.filter((w) => heard.some((h) => wordsMatch(w, h, { loose: w.length >= 4 }))).length;
     const allLit = idx.every((i) => snap.status[i] !== 'unread');
-    if (allLit || got / want.length >= 0.6) {
+    if (!allLit && got / want.length < 0.6) return undefined;
+    // Let them finish the sentence: move on after a short pause with nothing new heard.
+    const t = setTimeout(() => {
       tracker.completeSentence(idx);
       setSnap(tracker.snapshot());
       celebrateWords(idx);
@@ -262,7 +279,8 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
       } else {
         setEchoPhase('done');
       }
-    }
+    }, allLit ? 600 : 1400);
+    return () => clearTimeout(t);
   }, [snap.heard, snap.status, echoPhase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pct = Math.round(snap.progress * 100);
@@ -308,6 +326,11 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
       )}
 
       <main className="prompter-wrap">
+        {!listening && !unlocked && !echo && listenFirst === 'done' && mic !== 'unsupported' && (
+          <button className="start-top" onClick={toggleMic}>
+            🎤 {snap.readCount > 0 ? 'Keep reading' : 'Start reading'}
+          </button>
+        )}
         <div className="script-label">
           <span>{isStory ? 'STORY' : 'SCRIPT'}</span> {brief.title}
         </div>

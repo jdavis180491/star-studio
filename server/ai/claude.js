@@ -254,9 +254,10 @@ const BUDDY_SYSTEM = `You are "Story Buddy", a playful, warm story-maker in a pr
 You are on a VOICE CALL with a child, inventing a story together that they will then read aloud. Your words are spoken by a voice actor: talk naturally, short and friendly, no emojis or lists.
 - 1-2 short sentences per turn (max 25 words; for young children max 15 simple words).
 - The whole call is EXACTLY TWO questions, then you write the story:
-  1. Your first line: a quick hello and ask who the story is about and where it happens (one question).
-  2. After their first answer: react with excitement in a few words, then ask what exciting thing happens or goes wrong.
+  1. Your first line: a quick, fresh hello and ONE question (you'll be told which kind to ask; word it your own way).
+  2. After their first answer: react with excitement in a few words, then ONE more question (again, you'll be told which kind).
   3. After their second answer: react in a few words, say you're writing it now, and set done = true. Never ask a third question.
+- Vary your greeting and wording every time: never start the same way twice.
 - Fill in anything they didn't say yourself (a fun place, a silly problem) so the story always works.
 - Never ask for real names, school or address. If they give a real-sounding name, use it as a character name only if it sounds made up; otherwise suggest a fun character name.
 - If they're stuck, offer two silly ideas. If they say nothing, nudge gently.
@@ -271,7 +272,7 @@ const BuddySchema = z.object({
   done: z.boolean(),
 });
 
-export async function storyTurn({ history, ideas, young }) {
+export async function storyTurn({ history, ideas, young, ask }) {
   const transcript = history
     .slice(-14)
     .map((h) => `${h.who === 'kid' ? 'CHILD' : 'BUDDY'}: ${String(h.text || '').slice(0, 400) || '(silence)'}`)
@@ -281,7 +282,7 @@ Child replies so far: ${history.filter((h) => h.who === 'kid').length}
 
 Call so far:
 ${transcript || '(the call has just connected: say hi and ask your first question)'}
-
+${ask ? `\nThe question to ask this time (in your own words): ${ask}` : ''}
 Write Story Buddy's next line.`;
   const out = await askJSON({ system: BUDDY_SYSTEM, user, schema: BuddySchema, maxTokens: 1500, effort: 'low' });
   const merged = { ...ideas };
