@@ -59,14 +59,14 @@ Voice: funny, energetic, a bit cheeky, like a cool older cousin who makes videos
 The challenge must be something a child can film safely indoors in under 60 seconds, with no props they wouldn't have (toys, socks, a pillow, a spoon are fine).
 Never mention real people, brands, apps, websites, YouTube, or anything scary beyond silly-spooky.
 Use British English spelling.
-Every keyword MUST appear in the brief exactly as given (a plural or -ed/-ing form is acceptable, but the plain form is best).`;
+If keywords are given, every keyword MUST appear in the brief exactly as given (a plural or -ed/-ing form is acceptable, but the plain form is best).`;
 
 const TRACK_RULES = {
   star: (kw) =>
-    `Audience: age 8, a reluctant reader. Write 3-5 short sentences (45-70 words total). Use the keywords: ${kw.join(', ')}.
-Keep every other word easy to decode (mostly one or two syllables). End with a clear "big finish" moment to film.`,
+    `Audience: ages 7-11. Write 3-5 short sentences (40-70 words total).${kw.length ? ` Use the keywords: ${kw.join(', ')}.` : ''}
+Keep most words easy to decode (mostly one or two syllables). End with a clear "big finish" moment to film.`,
   little: (kw) =>
-    `Audience: age 5, just learning phonics. Write 1-2 very short sentences (6-14 words total) using only simple, decodable words. Use the keyword: ${kw.join(', ')}.
+    `Audience: age 4-5, just learning phonics. Write 1-2 very short sentences (6-14 words total) using only simple, decodable words.${kw.length ? ` Use the keyword: ${kw.join(', ')}.` : ''}
 Include one simple action to film (hop, wave, spin, roar...). Choose an emoji that clearly pictures the sentence.`,
 };
 
@@ -93,13 +93,14 @@ function cleanChunks(list = [], keywords = []) {
   return out;
 }
 
-export async function generateBrief({ track, keywords, theme }) {
+export async function generateBrief({ track, keywords = [], theme, avoid = [] }) {
   let feedback = '';
   let last = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     const user = [
       TRACK_RULES[track](keywords),
-      theme ? `Theme idea from the kids: ${theme}` : 'Pick a fresh, surprising scenario.',
+      theme ? `Theme idea: ${theme}` : 'Pick a fresh, surprising scenario.',
+      avoid.length ? `Recent challenges (don't repeat these ideas): ${avoid.slice(0, 60).join('; ')}` : '',
       feedback && `Your last attempt had problems, fix them:\n${feedback}`,
     ]
       .filter(Boolean)

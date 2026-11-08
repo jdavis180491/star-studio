@@ -3,7 +3,9 @@ import express from 'express';
 import { q, one, many, tx } from '../db.js';
 import { requireParent, hashSecret, checkSecret, validPin, endSession } from '../auth.js';
 import { dayISO, addDays, isISODate } from '../lib/dates.js';
-import { TRACKS, KEYWORDS_PER_BRIEF, chooseKeywords, getBrief, saveBrief, sampleFor } from '../lib/briefs.js';
+import { upcomingBriefs, setAdminBriefs, clearBriefs, recentTitles } from '../lib/briefs.js';
+import { cleanWords, windowProblem, wordsForKid, setsFor, COHORTS, WORDS_PER_DAY } from '../lib/keywords.js';
+import { isAdminEmail } from '../lib/admin.js';
 import { familySettings, familyManagesScope, scopeMembers, randomCode } from '../lib/family.js';
 import { wordsFor, pickWords, YEAR_GROUPS, YEAR_LABELS } from '../data/wordBank.js';
 import { claudeEnabled, generateBrief, generateLittleFromMain, briefProblems, MODEL } from '../ai/claude.js';
@@ -21,11 +23,6 @@ import { eventForClient } from './learn.js';
 
 const MAX_CREW = 4;
 const TRACK_OPTIONS = ['star', 'little', 'family'];
-
-const cleanWords = (list) =>
-  [...new Set((Array.isArray(list) ? list : String(list || '').split(/[\s,;]+/))
-    .map((w) => String(w).toLowerCase().replace(/[^a-z'-]/g, '').trim())
-    .filter((w) => w.length >= 2 && w.length <= 24))].slice(0, 30);
 
 const kidForParent = (k) => ({
   id: k.id,
@@ -57,7 +54,8 @@ export function parentRouter() {
         today: dayISO(),
         tomorrow: addDays(dayISO(), 1),
         yearGroups: YEAR_GROUPS.map((id) => ({ id, label: YEAR_LABELS[id] })),
-        keywordsPerBrief: KEYWORDS_PER_BRIEF,
+        keywordsPerBrief: WORDS_PER_DAY,
+        admin: isAdminEmail(f.email),
         defaultVoice: DEFAULT_VOICE,
         maxCrew: MAX_CREW,
         timesTables: TIMES_TABLES,
@@ -197,7 +195,7 @@ export function parentRouter() {
     }
   });
 
-  // ------------------------------------------------------------- keywords & studio settings
+  // ------------------------------------------------------------- studio settings
   r.get('/settings', async (req, res, next) => {
     try {
       const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
@@ -209,30 +207,13 @@ export function parentRouter() {
 
   r.put('/settings', async (req, res, next) => {
     try {
-      const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
-      const cur = familySettings(f.settings);
       const b = req.body || {};
-      const nxt = { ...f.settings, ...cur };
-      if (b.directorVoiceId !== undefined) nxt.directorVoiceId = b.directorVoiceId ? String(b.directorVoiceId).slice(0, 60) : null;
-      for (const t of TRACKS) {
-        if (!b[t]) continue;
-        const s = { ...cur[t] };
-        if (YEAR_GROUPS.includes(b[t].yearGroup)) s.yearGroup = b[t].yearGroup;
-        if (b[t].weeklyWords !== undefined) s.weeklyWords = cleanWords(b[t].weeklyWords);
-        if (b[t].todayWords && typeof b[t].todayWords === 'object') {
-          const tw = {};
-          for (const [d, words] of Object.entries(b[t].todayWords)) {
-            if (isISODate(d) && d >= addDays(dayISO(), -1)) {
-              const w = cleanWords(words);
-              if (w.length) tw[d] = w;
-            }
-          }
-          s.todayWords = tw;
-        }
-        nxt[t] = s;
+      if (b.directorVoiceId !== undefined) {
+        const v = b.directorVoiceId ? String(b.directorVoiceId).slice(0, 60) : null;
+        await q(`UPDATE families SET settings = settings || $2::jsonb WHERE id = $1`, [fam(req), JSON.stringify({ directorVoiceId: v })]);
       }
-      await q(`UPDATE families SET settings = $2 WHERE id = $1`, [fam(req), nxt]);
-      res.json(familySettings(nxt));
+      const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
+      res.json(familySettings(f.settings));
     } catch (e) {
       next(e);
     }
@@ -244,96 +225,148 @@ export function parentRouter() {
     res.json({ words: pickWords(wordsFor(String(req.query.year || 'Y3'), { little }), n) });
   });
 
-  // ------------------------------------------------------------- daily briefs
-  // Which briefs this family writes: their own (kids not in a crew) + crews they host.
-  r.get('/briefs/scopes', async (req, res, next) => {
+  // ------------------------------------------------------------- keywords (a grown-up's own words for their children)
+  r.get('/keywords', async (req, res, next) => {
     try {
-      const scopes = [];
-      const own = await scopeMembers(`f:${fam(req)}`);
-      if (own.length) scopes.push({ scope: `f:${fam(req)}`, label: 'My family', members: own.map((k) => k.channel_name) });
-      for (const c of await many(`SELECT * FROM crews WHERE owner_family_id = $1 ORDER BY id`, [fam(req)])) {
-        const m = await scopeMembers(`c:${c.id}`);
-        scopes.push({ scope: `c:${c.id}`, label: `Crew: ${c.name}`, members: m.map((k) => k.channel_name) });
+      const kids = await many(`SELECT * FROM kids WHERE family_id = $1 ORDER BY id`, [fam(req)]);
+      const out = [];
+      for (const k of kids) {
+        const w = await wordsForKid(k);
+        out.push({ id: k.id, name: k.name, channelName: k.channel_name, avatar: k.avatar, yearGroup: k.year_group, today: w.words, source: w.source, until: w.until });
       }
-      // Crews my kids are in but someone else hosts (read-only note).
-      const guest = await many(
-        `SELECT DISTINCT c.name FROM crews c JOIN crew_members m ON m.crew_id = c.id JOIN kids k ON k.id = m.kid_id
-          WHERE k.family_id = $1 AND c.owner_family_id <> $1`,
-        [fam(req)]
-      );
-      res.json({ scopes, hostedElsewhere: guest.map((g) => g.name) });
+      const sets = await setsFor({ kidIds: kids.map((k) => k.id) });
+      res.json({ kids: out, sets, today: dayISO() });
     } catch (e) {
       next(e);
     }
   });
 
-  const checkScope = async (req, res, scope) => {
-    if (typeof scope !== 'string' || !(await familyManagesScope(fam(req), scope))) {
-      res.status(403).json({ error: 'You can only manage your family or crews you host' });
-      return false;
+  r.post('/keywords', async (req, res, next) => {
+    try {
+      const b = req.body || {};
+      const words = cleanWords(b.words);
+      if (!words.length) return res.status(400).json({ error: 'Add at least one word' });
+      const starts = b.starts || dayISO();
+      const problem = windowProblem(starts, b.ends);
+      if (problem) return res.status(400).json({ error: problem });
+      const ids = (Array.isArray(b.kidIds) ? b.kidIds : []).map(Number);
+      const mine = ids.length ? await many(`SELECT id FROM kids WHERE family_id = $1 AND id = ANY($2)`, [fam(req), ids]) : [];
+      if (!mine.length || mine.length !== ids.length) return res.status(400).json({ error: 'Choose which of your children these words are for' });
+      for (const k of mine) {
+        await q(`INSERT INTO keyword_sets (kid_id, family_id, cohort, words, starts, ends) VALUES ($1,$2,'all',$3,$4,$5)`, [k.id, fam(req), JSON.stringify(words), starts, b.ends]);
+      }
+      res.json({ ok: true, words });
+    } catch (e) {
+      next(e);
     }
-    return true;
+  });
+
+  r.delete('/keywords/:id', async (req, res, next) => {
+    try {
+      const del = await q(`DELETE FROM keyword_sets WHERE id = $1 AND family_id = $2 AND kid_id IS NOT NULL`, [Number(req.params.id), fam(req)]);
+      res.status(del.rowCount ? 200 : 404).json(del.rowCount ? { ok: true } : { error: 'Not found' });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ------------------------------------------------------------- admin: the daily brief + keywords for everyone
+  const requireAdmin = async (req, res, next) => {
+    try {
+      const f = await one(`SELECT email FROM families WHERE id = $1`, [fam(req)]);
+      if (!isAdminEmail(f?.email)) return res.status(403).json({ error: 'Only the app’s admin can do this' });
+      next();
+    } catch (e) {
+      next(e);
+    }
+  };
+  const cleanBrief = (b, track) => {
+    const title = String(b?.title || '').trim().slice(0, 40);
+    const text = String(b?.text || '').trim().replace(/\s+/g, ' ').slice(0, 600);
+    const emoji = String(b?.emoji || '⭐').slice(0, 8);
+    const words = text.split(' ').length;
+    const [lo, hi] = track === 'little' ? [3, 30] : [12, 110];
+    if (!title || words < lo || words > hi) return null;
+    return { title, text, emoji };
   };
 
-  r.get('/briefs', async (req, res, next) => {
+  r.get('/admin/briefs', requireAdmin, async (req, res, next) => {
     try {
-      const { scope } = req.query;
-      if (!(await checkScope(req, res, scope))) return;
-      const date = isISODate(req.query.date) ? req.query.date : dayISO();
-      const [star, little] = await Promise.all(TRACKS.map((t) => getBrief(scope, date, t)));
-      res.json({ date, star, little, samples: { star: sampleFor('star', date), little: sampleFor('little', date) } });
+      res.json({ today: dayISO(), days: await upcomingBriefs(dayISO(), 14) });
     } catch (e) {
       next(e);
     }
   });
 
-  r.post('/briefs/generate', rateLimit({ perMinute: 8 }), async (req, res, next) => {
+  r.post('/admin/briefs/generate', requireAdmin, rateLimit({ perMinute: 6 }), async (req, res, next) => {
     try {
-      const { scope, date, track, theme } = req.body || {};
-      if (!(await checkScope(req, res, scope))) return;
-      if (!isISODate(date) || !TRACKS.includes(track)) return res.status(400).json({ error: 'Bad date or track' });
-      if (!claudeEnabled()) return res.status(503).json({ error: 'Add ANTHROPIC_API_KEY in Replit Secrets to write briefs with Claude.' });
-      const keywords = (await chooseKeywords(scope, date, track)).keywords;
-      let out;
-      const main = track === 'little' ? await getBrief(scope, date, 'star') : null;
-      if (main && !theme) out = await generateLittleFromMain({ main, keywords });
-      else out = await generateBrief({ track, keywords, theme: typeof theme === 'string' ? theme.slice(0, 120) : '' });
-      const saved = await saveBrief({ scope, date, track, status: 'draft', title: out.title, text: out.text, keywords, chunks: out.chunks, picture: out.picture, source: 'claude' });
-      res.json({ brief: saved, problems: out.problems });
-    } catch (e) {
-      next(e);
-    }
-  });
-
-  r.put('/briefs', async (req, res, next) => {
-    try {
-      const { scope, date, track, title, text, keywords } = req.body || {};
-      if (!(await checkScope(req, res, scope))) return;
-      if (!isISODate(date) || !TRACKS.includes(track)) return res.status(400).json({ error: 'Bad date or track' });
-      const cur = await getBrief(scope, date, track);
-      const kws = keywords ? cleanWords(keywords) : cur?.keywords || [];
-      const body = String(text || '').trim().slice(0, 600);
-      if (!body) return res.status(400).json({ error: 'The brief is empty' });
-      const saved = await saveBrief({
-        scope, date, track, status: 'draft',
-        title: String(title || cur?.title || 'Today').trim().slice(0, 40),
-        text: body, keywords: kws, chunks: cur?.chunks || {}, picture: cur?.picture, source: 'edited',
+      if (!claudeEnabled()) return res.status(503).json({ error: 'Add ANTHROPIC_API_KEY in Replit Secrets to write briefs with AI.' });
+      const theme = typeof req.body?.theme === 'string' ? req.body.theme.slice(0, 160) : '';
+      const avoid = await recentTitles(addDays(dayISO(), 30), 90);
+      const star = await generateBrief({ track: 'star', keywords: [], theme, avoid });
+      const little = await generateLittleFromMain({ main: star, keywords: [] });
+      res.json({
+        star: { title: star.title, text: star.text, emoji: star.picture || '⭐' },
+        little: { title: star.title, text: little.text, emoji: star.picture || little.picture || '⭐' },
       });
-      res.json({ brief: saved, problems: briefProblems(body, kws, track) });
     } catch (e) {
       next(e);
     }
   });
 
-  r.post('/briefs/approve', async (req, res, next) => {
+  r.put('/admin/briefs/:date', requireAdmin, async (req, res, next) => {
     try {
-      const { scope, date, track } = req.body || {};
-      if (!(await checkScope(req, res, scope))) return;
-      const cur = isISODate(date) && TRACKS.includes(track) ? await getBrief(scope, date, track) : null;
-      if (!cur) return res.status(404).json({ error: 'Nothing to approve yet' });
-      const problems = briefProblems(cur.text, cur.keywords, track).filter((p) => p.includes('keyword'));
-      if (problems.length) return res.status(400).json({ error: problems.join(' ') });
-      res.json({ brief: await saveBrief({ ...cur, status: 'approved' }) });
+      const date = req.params.date;
+      if (!isISODate(date) || date <= dayISO()) return res.status(400).json({ error: 'You can change tomorrow’s brief or later. Today’s is already out.' });
+      const star = cleanBrief(req.body?.star, 'star');
+      const little = cleanBrief(req.body?.little, 'little');
+      if (!star || !little) return res.status(400).json({ error: 'Both the older and young briefs need a title and some text.' });
+      await setAdminBriefs(date, { star, little });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.delete('/admin/briefs/:date', requireAdmin, async (req, res, next) => {
+    try {
+      const date = req.params.date;
+      if (!isISODate(date) || date <= dayISO()) return res.status(400).json({ error: 'Today’s brief is already out.' });
+      await clearBriefs(date);
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.get('/admin/keywords', requireAdmin, async (req, res, next) => {
+    try {
+      res.json({ sets: await setsFor({ admin: true }), today: dayISO() });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.post('/admin/keywords', requireAdmin, async (req, res, next) => {
+    try {
+      const b = req.body || {};
+      const words = cleanWords(b.words);
+      if (!words.length) return res.status(400).json({ error: 'Add at least one word' });
+      const cohort = COHORTS.includes(b.cohort) ? b.cohort : 'all';
+      const starts = b.starts || dayISO();
+      const problem = windowProblem(starts, b.ends);
+      if (problem) return res.status(400).json({ error: problem });
+      await q(`INSERT INTO keyword_sets (kid_id, family_id, cohort, words, starts, ends) VALUES (NULL,$1,$2,$3,$4,$5)`, [fam(req), cohort, JSON.stringify(words), starts, b.ends]);
+      res.json({ ok: true, words });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.delete('/admin/keywords/:id', requireAdmin, async (req, res, next) => {
+    try {
+      const del = await q(`DELETE FROM keyword_sets WHERE id = $1 AND kid_id IS NULL`, [Number(req.params.id)]);
+      res.status(del.rowCount ? 200 : 404).json(del.rowCount ? { ok: true } : { error: 'Not found' });
     } catch (e) {
       next(e);
     }
@@ -571,7 +604,6 @@ export function parentRouter() {
       if (!(await checkSecret(req.body?.password || '', f.password_hash))) return res.status(401).json({ error: 'Password not right' });
       const vids = await many(`SELECT v.* FROM videos v JOIN kids k ON k.id = v.kid_id WHERE k.family_id = $1`, [fam(req)]);
       for (const v of vids) await deleteVideoFiles(v);
-      await q(`DELETE FROM briefs WHERE scope = $1`, [`f:${fam(req)}`]);
       await q(`DELETE FROM families WHERE id = $1`, [fam(req)]);
       await endSession(req, res);
       res.json({ ok: true });

@@ -5,7 +5,7 @@ import fsp from 'node:fs/promises';
 import { q, one, many, tx } from '../db.js';
 import { requireKid, requireDevice } from '../auth.js';
 import { dayISO, weekStartISO, weekday, localHour, PREMIERE_HOUR } from '../lib/dates.js';
-import { briefForKids } from '../lib/briefs.js';
+import { briefForKid } from '../lib/briefs.js';
 import { scopeForKid, crewForKid, scopeMembers, publicKid, familySettings } from '../lib/family.js';
 import { grant, markDaily, spend, nextStreak, DOB_VALUES, BONUS, VIRAL_CHANCE } from '../lib/rewards.js';
 import { later, notifyFamily } from '../lib/notify.js';
@@ -47,10 +47,9 @@ export function kidRouter() {
     try {
       const kid = req.kid;
       const date = dayISO();
-      const scope = await scopeForKid(kid);
       const tracks = kid.track === 'family' ? ['star', 'little'] : [kid.track];
       const briefs = {};
-      for (const t of tracks) briefs[t] = await briefForKids(scope, t, date);
+      for (const t of tracks) briefs[t] = await briefForKid(kid, { track: t, date });
       const events = await many(`SELECT type FROM events WHERE kid_id = $1 AND event_date = $2`, [kid.id, date]);
       const video = await one(
         `SELECT * FROM videos WHERE kid_id = $1 AND brief_date = $2 ORDER BY (status IN ('submitted','approved')) DESC, created_at DESC LIMIT 1`,
@@ -104,7 +103,7 @@ export function kidRouter() {
     try {
       const kid = req.kid;
       const track = pickTrack(kid, req.body?.track);
-      const brief = await briefForKids(await scopeForKid(kid), track);
+      const brief = await briefForKid(kid, { track });
       const history = (Array.isArray(req.body?.history) ? req.body.history : [])
         .slice(-20)
         .map((h) => ({ who: h.who === 'kid' ? 'kid' : 'director', text: String(h.text || '').slice(0, 400) }));
@@ -118,7 +117,7 @@ export function kidRouter() {
   // Little Stars: the Director reads the brief first.
   r.post('/kid/director/read-brief', async (req, res, next) => {
     try {
-      const brief = await briefForKids(await scopeForKid(req.kid), pickTrack(req.kid, req.body?.track));
+      const brief = await briefForKid(req.kid, { track: pickTrack(req.kid, req.body?.track) });
       res.json({ line: registerLine(brief.text, await voiceIdFor(req.kid)) });
     } catch (e) {
       next(e);
@@ -133,8 +132,8 @@ export function kidRouter() {
       const posted = await one(`SELECT 1 FROM videos WHERE kid_id = $1 AND brief_date = $2 AND status IN ('submitted','approved')`, [kid.id, date]);
       if (posted) return res.status(409).json({ error: "You've already posted today's video. New challenge tomorrow!" });
       const track = pickTrack(kid, req.body?.track);
-      const scope = await scopeForKid(kid);
-      const brief = await briefForKids(scope, track, date);
+      const scope = await scopeForKid(kid); // the crew: who sees the video at the premiere
+      const brief = await briefForKid(kid, { track, date });
       // Only one draft per day: replace older unposted takes.
       const old = await many(`SELECT * FROM videos WHERE kid_id = $1 AND brief_date = $2 AND status NOT IN ('submitted','approved','rejected')`, [kid.id, date]);
       for (const o of old) await deleteVideoFiles(o);

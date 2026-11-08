@@ -110,3 +110,35 @@ test('every activity is worth exactly 1 Dob, and the values cannot be changed', 
     DOB_VALUES.reading = 5;
   });
 });
+
+import { autoWords, cleanWords, windowProblem } from '../server/lib/keywords.js';
+import { bankPairFor } from '../server/lib/briefs.js';
+import { BRIEF_BANK } from '../server/data/briefBank.js';
+import { isAdminEmail } from '../server/lib/admin.js';
+
+test('one brief a day for everyone, from a bank that lasts months', () => {
+  assert.ok(BRIEF_BANK.length >= 150);
+  const a = bankPairFor('2026-11-10');
+  assert.deepEqual(bankPairFor('2026-11-10'), a, 'same day, same brief');
+  assert.equal(a.star.title, a.little.title, 'young and older get the same idea');
+  const titles = new Set(Array.from({ length: BRIEF_BANK.length }, (_, i) => bankPairFor(addDays('2026-11-10', i)).star.title));
+  assert.equal(titles.size, BRIEF_BANK.length, 'no repeats until the whole bank is used');
+});
+
+test('automatic keywords: same for the whole year group each day, and they change daily', () => {
+  assert.deepEqual(autoWords('Y3', 'star', '2026-11-10'), autoWords('Y3', 'star', '2026-11-10'));
+  assert.notDeepEqual(autoWords('Y3', 'star', '2026-11-10'), autoWords('Y3', 'star', '2026-11-11'));
+  assert.equal(autoWords('R', 'little', '2026-11-10').length, 1);
+  assert.deepEqual(cleanWords('Rocket, planet!  rocket;x'), ['rocket', 'planet']);
+  assert.equal(windowProblem('2026-11-10', '2026-11-09', '2026-11-10'), 'The end date must be on or after the start date');
+  assert.equal(windowProblem('2026-11-10', '2026-11-17', '2026-11-10'), null);
+});
+
+test('admins come from the ADMIN_EMAILS secret', () => {
+  const was = process.env.ADMIN_EMAILS;
+  process.env.ADMIN_EMAILS = 'Me@Example.com, other@x.com';
+  assert.equal(isAdminEmail('me@example.com'), true);
+  assert.equal(isAdminEmail('nobody@x.com'), false);
+  process.env.ADMIN_EMAILS = was || '';
+  assert.equal(isAdminEmail(''), false);
+});
