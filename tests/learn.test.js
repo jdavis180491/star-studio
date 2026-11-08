@@ -24,7 +24,7 @@ function client() {
     if (set) cookie = set.split(';')[0];
     return { status: res.status, data: await res.json().catch(() => ({})) };
   };
-  return { get: (u) => call('GET', u), post: (u, b) => call('POST', u, b || {}), put: (u, b) => call('PUT', u, b || {}) };
+  return { get: (u) => call('GET', u), post: (u, b) => call('POST', u, b || {}), put: (u, b) => call('PUT', u, b || {}), del: (u) => call('DELETE', u, {}) };
 }
 
 test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) => {
@@ -53,6 +53,11 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   const A = client();
   await A.post('/api/auth/signup', { email: 'a@x.com', password: 'password1', consent: true });
   const a1 = (await A.post('/api/parent/kids', { name: 'Ann', channelName: 'Ann TV', pin: '1111', track: 'star', yearGroup: 'Y3' })).data.kid;
+  // Everything can be set when the child is first added: levels, times tables and number bonds.
+  const setUp = (await A.post('/api/parent/kids', { name: 'Zed', channelName: 'Zed TV', pin: '4444', track: 'star', yearGroup: 'Y4', levels: { maths: 'Y2', spelling: 'Y3' }, maths: { timesTables: [3, 4], bonds: [20] } })).data.kid;
+  assert.deepEqual(setUp.levels, { spelling: 'Y3', maths: 'Y2' });
+  assert.deepEqual(setUp.settings.maths, { timesTables: [3, 4], bonds: [20] });
+  await A.del(`/api/parent/kids/${setUp.id}`);
   const a2 = (await A.post('/api/parent/kids', { name: 'Bob', channelName: 'Bob TV', pin: '2222', track: 'little', yearGroup: 'R' })).data.kid;
   const B = client();
   await B.post('/api/auth/signup', { email: 'b@x.com', password: 'password2', consent: true });

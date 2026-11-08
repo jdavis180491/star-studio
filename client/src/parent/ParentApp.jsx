@@ -291,7 +291,7 @@ function Kids({ status }) {
         </div>
       ))}
       {!edit && (
-        <button className="btn primary" onClick={() => setEdit({ name: '', channelName: '', track: 'star', yearGroup: 'Y3', pin: '', levels: {} })}>
+        <button className="btn primary" onClick={() => setEdit({ name: '', channelName: '', track: 'star', yearGroup: 'Y3', pin: '', levels: {}, maths: { timesTables: [2, 5, 10], bonds: [10] } })}>
           + Add a child
         </button>
       )}
@@ -381,7 +381,7 @@ function Kids({ status }) {
                     </button>
                   ))}
                 </div>
-                <div className="muted small">Addition and subtraction difficulty follows the year group.</div>
+                <div className="muted small">Addition and subtraction difficulty follows the maths level.</div>
               </>
             )}
             <label>

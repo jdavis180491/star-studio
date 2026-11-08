@@ -80,7 +80,7 @@ export function parentRouter() {
 
   r.post('/kids', async (req, res, next) => {
     try {
-      const { name, channelName, pin, track = 'star', yearGroup, levels } = req.body || {};
+      const { name, channelName, pin, track = 'star', yearGroup, levels, maths } = req.body || {};
       if (!String(name || '').trim()) return res.status(400).json({ error: 'Add a name (only you will see it)' });
       if (!String(channelName || '').trim()) return res.status(400).json({ error: 'Add a channel name' });
       if (!validPin(String(pin || ''))) return res.status(400).json({ error: 'The PIN must be 4 digits' });
@@ -91,7 +91,7 @@ export function parentRouter() {
       const k = await one(
         `INSERT INTO kids (family_id, name, channel_name, track, year_group, pin_hash, avatar, owned, settings)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [fam(req), String(name).trim().slice(0, 40), String(channelName).trim().slice(0, 30), track, yg, await hashSecret(pin), AVATAR_DEFAULT, JSON.stringify(FREE_ITEMS), { levels: cleanLevels(levels) }]
+        [fam(req), String(name).trim().slice(0, 40), String(channelName).trim().slice(0, 30), track, yg, await hashSecret(pin), AVATAR_DEFAULT, JSON.stringify(FREE_ITEMS), { levels: cleanLevels(levels), ...(maths && typeof maths === 'object' ? { maths: mathsSettings({ maths }) } : {}) }]
       );
       res.json({ kid: kidForParent(k) });
     } catch (e) {
