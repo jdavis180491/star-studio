@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { Logo } from '../components/Bits.jsx';
+import { DobsLogo as Logo, DobIcon } from '../components/Dob.jsx';
 import Avatar from '../components/Avatar.jsx';
 import { tokenizeBrief, normalizeWord, isKeywordForm } from '../reading/words.js';
 import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
@@ -8,6 +8,7 @@ import { unlockAudio } from '../sfx.js';
 
 const TABS = [
   ['kids', 'Kids'],
+  ['dobs', 'Dibbly Dobs'],
   ['approvals', 'Approvals'],
   ['briefs', 'Daily briefs'],
   ['keywords', 'Keywords'],
@@ -30,7 +31,8 @@ export default function ParentApp() {
     if (m.parentMode) {
       setStatus(await api.get('/api/parent/status'));
       const v = await api.get('/api/parent/videos').catch(() => ({ videos: [] }));
-      setPending(v.videos.filter((x) => x.status === 'submitted').length);
+      const l = await api.get('/api/parent/letters').catch(() => ({ letters: [] }));
+      setPending(v.videos.filter((x) => x.status === 'submitted').length + l.letters.filter((x) => x.status === 'pending').length);
     }
   }, []);
   useEffect(() => {
@@ -77,6 +79,7 @@ export default function ParentApp() {
 
       <main className="parent-main">
         {tab === 'kids' && <Kids status={status} />}
+        {tab === 'dobs' && <Dobs />}
         {tab === 'approvals' && <Approvals onChange={load} />}
         {tab === 'briefs' && <Briefs status={status} />}
         {tab === 'keywords' && <Keywords status={status} />}
@@ -245,10 +248,18 @@ function Kids({ status }) {
           <div className="grow">
             <h2>{k.channelName}</h2>
             <div className="muted">
-              {k.name} · {MODE_NAME[k.track]} · {status.yearGroups.find((y) => y.id === k.yearGroup)?.label} · ★ {k.followers} · 🔥 {k.streak}
+              {k.name} · {MODE_NAME[k.track]} · {status.yearGroups.find((y) => y.id === k.yearGroup)?.label} · {k.dobs} Dibbly Dobs · ★ {k.followers}
             </div>
           </div>
-          <button className="btn" onClick={() => setEdit({ id: k.id, name: k.name, channelName: k.channelName, track: k.track, yearGroup: k.yearGroup, pin: '' })}>
+          <button
+            className="btn"
+            onClick={() =>
+              setEdit({
+                id: k.id, name: k.name, channelName: k.channelName, track: k.track, yearGroup: k.yearGroup, pin: '',
+                maths: { timesTables: k.settings?.maths?.timesTables || [2, 5, 10], bonds: k.settings?.maths?.bonds || [10] },
+              })
+            }
+          >
             Edit
           </button>
           <button className="btn danger" onClick={() => remove(k)}>
@@ -270,7 +281,7 @@ function Kids({ status }) {
               <input value={edit.name} maxLength={40} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
             </label>
             <label>
-              Channel name (what the app and friends see; don’t use their real name)
+              Name in the app (their channel name: friends see this, so don’t use their real name)
               <input value={edit.channelName} maxLength={30} onChange={(e) => setEdit({ ...edit, channelName: e.target.value })} />
             </label>
             <label>
@@ -291,6 +302,41 @@ function Kids({ status }) {
                 ))}
               </select>
             </label>
+            {edit.maths && (
+              <>
+                <div className="field-label">Times tables to practise</div>
+                <div className="chip-pick">
+                  {status.timesTables.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`pick ${edit.maths.timesTables.includes(n) ? 'on' : ''}`}
+                      onClick={() =>
+                        setEdit({ ...edit, maths: { ...edit.maths, timesTables: edit.maths.timesTables.includes(n) ? edit.maths.timesTables.filter((x) => x !== n) : [...edit.maths.timesTables, n].sort((a, b) => a - b) } })
+                      }
+                    >
+                      ×{n}
+                    </button>
+                  ))}
+                </div>
+                <div className="field-label">Number bonds to</div>
+                <div className="chip-pick">
+                  {status.bondTargets.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`pick ${edit.maths.bonds.includes(n) ? 'on' : ''}`}
+                      onClick={() =>
+                        setEdit({ ...edit, maths: { ...edit.maths, bonds: edit.maths.bonds.includes(n) ? edit.maths.bonds.filter((x) => x !== n) : [...edit.maths.bonds, n].sort((a, b) => a - b) } })
+                      }
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <div className="muted small">Addition and subtraction difficulty follows the year group.</div>
+              </>
+            )}
             <label>
               {edit.id ? 'New 4-digit PIN (leave empty to keep it)' : '4-digit PIN'}
               <input inputMode="numeric" maxLength={4} value={edit.pin} onChange={(e) => setEdit({ ...edit, pin: e.target.value.replace(/\D/g, '') })} />
@@ -314,8 +360,13 @@ function Kids({ status }) {
 // ------------------------------------------------------------- approvals
 function Approvals({ onChange }) {
   const [videos, setVideos] = useState(null);
+  const [letters, setLetters] = useState([]);
   const { busy, err, run } = useAction();
-  const load = () => api.get('/api/parent/videos').then((d) => setVideos(d.videos));
+  const load = () => {
+    api.get('/api/parent/letters').then((d) => setLetters(d.letters));
+    return api.get('/api/parent/videos').then((d) => setVideos(d.videos));
+  };
+  const actLetter = (id, what) => run('…', async () => (await api.post(`/api/parent/letters/${id}/${what}`), await load(), onChange()));
   useEffect(() => {
     load();
   }, []);
@@ -334,6 +385,30 @@ function Approvals({ onChange }) {
     <section>
       <p className="muted">Nothing is shown to your child’s crew until you approve it. Crews see approved videos together at the premiere (when everyone has posted, or 6pm).</p>
       {err && <div className="notice">{err}</div>}
+      {letters.length > 0 && <h2 className="p-sub">Stories & letters</h2>}
+      {letters.map((l) => (
+        <div key={l.id} className={`p-card ${l.status === 'pending' ? 'highlight' : ''}`}>
+          <div className="p-card-head">
+            <h2>
+              {l.toMe ? `${l.from} wrote to you` : `${l.from} → ${l.to}`}
+            </h2>
+            <span className={`badge ${l.status === 'pending' ? 'submitted' : l.status}`}>{l.status === 'pending' ? 'Check before it’s sent' : l.toMe ? 'For you' : l.status}</span>
+          </div>
+          {l.topic && <div className="muted small">{l.topic}</div>}
+          <p className="p-letter">{l.body}</p>
+          {l.status === 'pending' && (
+            <div className="p-actions">
+              <button className="btn primary" onClick={() => actLetter(l.id, 'approve')} disabled={Boolean(busy)}>
+                ✓ Send it
+              </button>
+              <button className="btn" onClick={() => actLetter(l.id, 'reject')} disabled={Boolean(busy)}>
+                Don’t send
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+      <h2 className="p-sub">Star Studio videos</h2>
       {!videos.length && <div className="muted">No videos yet.</div>}
       {videos.map((v) => (
         <div key={v.id} className={`p-card ${v.status === 'submitted' ? 'highlight' : ''}`}>
@@ -769,8 +844,10 @@ function Crews({ status }) {
 // ------------------------------------------------------------- stats
 function Stats() {
   const [data, setData] = useState(null);
+  const [practice, setPractice] = useState({});
   useEffect(() => {
     api.get('/api/parent/stats').then(setData);
+    api.get('/api/parent/practice-stats').then((d) => setPractice(Object.fromEntries(d.kids.map((k) => [k.kidId, k]))));
   }, []);
   if (!data) return <div className="muted">Loading…</div>;
   if (!data.kids.length) return <div className="muted">Add a child first.</div>;
@@ -800,6 +877,7 @@ function Stats() {
               <span>keywords mastered</span>
             </div>
           </div>
+          {practice[s.kid.id] && <PracticeStats p={practice[s.kid.id]} />}
           <h3>Keywords mastered</h3>
           <div className="word-chips">{s.keywordsMastered.length ? s.keywordsMastered.map((w) => <span key={w} className="wchip good">{w}</span>) : <span className="muted">None yet: a keyword is mastered after reading it correctly in two sessions.</span>}</div>
           <h3>Still practising</h3>
@@ -925,6 +1003,192 @@ function Settings({ status }) {
       {msg && <div className="saved">{msg}</div>}
       {err && <div className="notice">{err}</div>}
       <p className="muted small">Signed in as {status.email}</p>
+    </section>
+  );
+}
+
+function PracticeStats({ p }) {
+  return (
+    <>
+      <div className="stat-grid">
+        <div className="pstat">
+          <b>{p.stories}</b>
+          <span>stories made ({p.storyReads} reads)</span>
+        </div>
+        <div className="pstat">
+          <b>{p.writing}</b>
+          <span>stories & letters written</span>
+        </div>
+        <div className="pstat">
+          <b>{p.spelling.accuracy == null ? '–' : `${p.spelling.accuracy}%`}</b>
+          <span>spelling first-time right ({p.spelling.sets} sets)</span>
+        </div>
+      </div>
+      <h3>Maths</h3>
+      <div className="word-chips">
+        {p.maths.map((m) => (
+          <span key={m.type} className="wchip">
+            {m.name}: {m.sets ? `${m.accuracy}% · ${m.sets} sets` : 'not tried'}
+          </span>
+        ))}
+      </div>
+      <h3>Tricky spellings</h3>
+      <div className="word-chips">
+        {p.spelling.tricky.length ? p.spelling.tricky.map((w) => <span key={w.word} className="wchip warn">{w.word} ×{w.times}</span>) : <span className="muted">None yet.</span>}
+      </div>
+    </>
+  );
+}
+
+// ------------------------------------------------------------- Dibbly Dobs
+const TYPE_LABEL = {
+  studio: 'Star Studio video', reading: 'Read a story aloud', writing: 'Wrote a story', continue: 'Continued a story',
+  spelling: 'Spelling set', 'maths-addition': 'Maths: addition', 'maths-subtraction': 'Maths: subtraction',
+  'maths-bonds': 'Maths: number bonds', 'maths-times': 'Maths: times tables', buy: 'Bought in the app shop', help: 'Word help',
+  'parent-good': 'Good behaviour', 'parent-naughty': 'Naughty', 'parent-spent': 'Spent at the shops', 'parent-other': 'Grown-up adjustment',
+};
+
+function Dobs() {
+  const [data, setData] = useState(null);
+  const [rules, setRules] = useState(null);
+  const [form, setForm] = useState(null); // { kidId, reason, amount, note }
+  const [saved, setSaved] = useState(false);
+  const { busy, err, run } = useAction();
+  const load = () => api.get('/api/parent/dobs').then(setData);
+  useEffect(() => {
+    load();
+    api.get('/api/parent/dob-rules').then(setRules);
+  }, []);
+  if (!data || !rules) return <div className="muted">Loading…</div>;
+
+  const submit = () =>
+    run('…', async () => {
+      await api.post('/api/parent/dobs/adjust', form);
+      setForm(null);
+      load();
+    });
+
+  return (
+    <section>
+      <p className="muted">
+        Children earn Dibbly Dobs instantly when they finish something, using the values you set below. You see exactly what they did, and you can add Dobs for
+        good behaviour, take some away for naughty behaviour, or take off what they spend at the shops.
+      </p>
+      <div className="dob-kids">
+        {data.kids.map((k) => (
+          <div key={k.id} className="p-card dob-kid">
+            <div className="dob-kid-head">
+              <Avatar avatar={k.avatar} size={56} />
+              <div className="grow">
+                <h2>{k.channelName}</h2>
+                <div className="dob-big">
+                  <DobIcon size={34} /> {k.dobs}
+                </div>
+              </div>
+            </div>
+            <div className="p-actions">
+              <button className="btn good" onClick={() => setForm({ kidId: k.id, reason: 'good', amount: 1, note: '' })}>
+                🌟 Good
+              </button>
+              <button className="btn danger" onClick={() => setForm({ kidId: k.id, reason: 'naughty', amount: 1, note: '' })}>
+                😬 Naughty
+              </button>
+              <button className="btn" onClick={() => setForm({ kidId: k.id, reason: 'spent', amount: 1, note: '' })}>
+                🛍️ Spent
+              </button>
+            </div>
+            {form?.kidId === k.id && (
+              <div className="p-form adjust">
+                <label>
+                  {form.reason === 'good' ? 'Add how many Dobs?' : form.reason === 'spent' ? 'How many Dobs did they spend?' : 'Take away how many Dobs?'}
+                  <input type="number" min="1" max="500" inputMode="numeric" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+                </label>
+                <label>
+                  What for? (they’ll see this)
+                  <input value={form.note} maxLength={120} placeholder={form.reason === 'good' ? 'Tidied their room' : form.reason === 'spent' ? 'Sweets at the shop' : 'Not listening at bedtime'} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+                </label>
+                <div className="p-actions">
+                  <button className="btn primary" onClick={submit} disabled={Boolean(busy)}>
+                    Save
+                  </button>
+                  <button className="btn" onClick={() => setForm(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {err && <div className="notice">{err}</div>}
+
+      <div className="p-card">
+        <h2>What they did</h2>
+        {!data.feed.length && <div className="muted">Nothing yet.</div>}
+        <table className="ptable feed">
+          <tbody>
+            {data.feed.map((e) => (
+              <tr key={e.id}>
+                <td className={`amt ${e.dobs > 0 ? 'plus' : 'minus'}`}>
+                  {e.dobs > 0 ? '+' : ''}
+                  {e.dobs}
+                </td>
+                <td>
+                  <b>{e.channelName}</b> · {TYPE_LABEL[e.type] || e.type}
+                  <div className="muted small">{e.note || e.what}</div>
+                </td>
+                <td className="when">{new Date(e.at).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="p-card">
+        <h2>Dob values</h2>
+        <p className="muted">How many Dibbly Dobs each activity is worth. Set 0 to give none.</p>
+        <div className="rules">
+          {rules.activities.map((a) => (
+            <label key={a.id} className="rule">
+              <span>
+                {a.name} <em>({a.hint})</em>
+              </span>
+              <input
+                type="number"
+                min="0"
+                max="50"
+                inputMode="numeric"
+                value={rules.rules[a.id]}
+                onChange={(e) => {
+                  setSaved(false);
+                  setRules({ ...rules, rules: { ...rules.rules, [a.id]: e.target.value } });
+                }}
+              />
+            </label>
+          ))}
+          <label className="rule">
+            <span>
+              Word help costs <em>(when reading; free if they can’t afford it)</em>
+            </span>
+            <input type="number" min="0" max="10" inputMode="numeric" value={rules.rules.helpCost} onChange={(e) => { setSaved(false); setRules({ ...rules, rules: { ...rules.rules, helpCost: e.target.value } }); }} />
+          </label>
+        </div>
+        <div className="p-actions">
+          <button
+            className="btn primary"
+            onClick={() =>
+              run('…', async () => {
+                const out = await api.put('/api/parent/dob-rules', { rules: rules.rules });
+                setRules({ ...rules, rules: out.rules });
+                setSaved(true);
+              })
+            }
+          >
+            Save values
+          </button>
+          {saved && <span className="saved">Saved ✓</span>}
+        </div>
+      </div>
     </section>
   );
 }

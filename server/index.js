@@ -7,6 +7,7 @@ import { loadSession, requireAppHeader } from './auth.js';
 import { authRouter } from './routes/auth.js';
 import { parentRouter } from './routes/parent.js';
 import { kidRouter } from './routes/kid.js';
+import { learnRouter } from './routes/learn.js';
 import { mediaRouter } from './routes/media.js';
 import { sampleBriefs } from './data/sampleBriefs.js';
 import { claudeEnabled } from './ai/claude.js';
@@ -45,7 +46,7 @@ app.use('/api', (req, res, next) => (req.path.endsWith('/raw') ? next() : expres
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
-    phase: 7,
+    app: 'dibbly-dobs',
     claude: claudeEnabled(),
     voice: voiceEnabled(),
     transcribe: transcribeEnabled(),
@@ -60,6 +61,7 @@ app.use('/api', authRouter());
 app.use('/api/parent', parentRouter());
 app.use('/api', mediaRouter());
 app.use('/api', kidRouter());
+app.use('/api', learnRouter());
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -84,7 +86,7 @@ if (fs.existsSync(distDir)) {
 
 const port = Number(process.env.PORT) || 3000;
 app.listen(port, '0.0.0.0', () => {
-  console.log(`⭐ Star Studio is running on port ${port}`);
+  console.log(`🟣 Dibbly Dobs is running on port ${port}`);
   console.log(
     `   Claude: ${claudeEnabled() ? 'on' : 'off'} · Voice: ${voiceEnabled() ? 'ElevenLabs' : 'device'} · Transcripts: ${transcribeEnabled() ? 'Whisper' : 'off'} · Storage: ${storageKind()}`
   );

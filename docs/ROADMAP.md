@@ -1,4 +1,4 @@
-# Star Studio roadmap and decisions
+# Dibbly Dobs roadmap and decisions
 
 Decisions agreed with the owner, so they survive between build phases.
 
@@ -29,3 +29,10 @@ All seven phases are built (pending real-iPad testing):
 ## Next ideas
 - "Tomorrow's pick": one child chooses tomorrow's theme the night before (the brief already takes a theme).
 - Whisper speech recognition for reading, if Safari struggles with the kids' voices.
+
+## Dibbly Dobs (Nov 2026)
+- The app is **Dibbly Dobs**. **Star Studio** is one of five sections (with Reading, Writing, Spelling, Maths).
+- **Dibbly Dobs replace coins everywhere.** Grown-ups set what each activity is worth in the portal ("Dob values"), so children get them instantly. Star Studio: once a day; the others: every time.
+- Grown-ups see every Dob earned with what the child did, and can add (good), take away (naughty) or spend (shops).
+- Writing goes to siblings, crew friends or a grown-up. Anything going to another family is checked by the sender's grown-up first (the only free text between children, and it is always parent-checked).
+- Followers remain Star Studio's fun video score; the Dobs leaderboard covers family + crew, weekly.

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { chunkWord, speakableChunk } from '../reading/phonics.js';
 import { speakSequence } from '../speech/speak.js';
-const HELP_COST = 2;
+import { DobIcon } from './Dob.jsx';
 
-export default function WordHelpSheet({ token, overrides, paid, coins, onPay, onClose }) {
+export default function WordHelpSheet({ token, overrides, paid, coins = 0, helpCost = 0, onPay, onClose }) {
   const word = token.display.replace(/[^A-Za-z0-9'’-]/g, '').replace(/-$/, '');
   const chunks = chunkWord(token.norm, overrides);
   const [revealed, setRevealed] = useState(paid);
@@ -25,7 +25,7 @@ export default function WordHelpSheet({ token, overrides, paid, coins, onPay, on
     play();
   };
 
-  const free = paid || coins < HELP_COST;
+  const free = paid || !helpCost || coins < helpCost;
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -51,7 +51,7 @@ export default function WordHelpSheet({ token, overrides, paid, coins, onPay, on
                 <span className="price">FREE</span>
               ) : (
                 <span className="price">
-                  <span className="coin" /> {HELP_COST}
+                  <DobIcon size={20} /> {helpCost}
                 </span>
               )}
             </button>

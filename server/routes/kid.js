@@ -7,8 +7,8 @@ import { requireKid, requireDevice } from '../auth.js';
 import { dayISO, weekStartISO, weekday, localHour, PREMIERE_HOUR } from '../lib/dates.js';
 import { briefForKids } from '../lib/briefs.js';
 import { scopeForKid, crewForKid, scopeMembers, publicKid, familySettings } from '../lib/family.js';
-import { grant, grantDaily, spend, nextStreak, league, REWARDS, VIRAL_CHANCE } from '../lib/rewards.js';
-import { SHOP, HELP_COST, STICKERS, AWARDS, cleanAvatar } from '../lib/catalog.js';
+import { grant, grantDaily, spend, nextStreak, league, rulesForKid, REWARDS, VIRAL_CHANCE } from '../lib/rewards.js';
+import { SHOP, STICKERS, AWARDS, cleanAvatar } from '../lib/catalog.js';
 import { premiereState, videoForClient } from '../lib/videos.js';
 import { rateLimit } from '../lib/rateLimit.js';
 import { nextTurn } from '../ai/director.js';
@@ -98,11 +98,14 @@ export function kidRouter() {
     }
   });
 
-  // Word help costs 2 coins, but is free when you're out of coins. Never blocked.
+  // Word help costs whatever the grown-up set (free by default), and is free when
+  // you can't afford it. Never blocked.
   r.post('/kid/help', async (req, res, next) => {
     try {
-      const out = await spend(req.kid.id, HELP_COST, 'help', { word: String(req.body?.word || '').slice(0, 30) });
-      res.json(out ? { coins: out.coins, paid: true } : { coins: req.kid.coins, paid: false });
+      const { helpCost } = await rulesForKid(req.kid.id);
+      if (!helpCost) return res.json({ dobs: req.kid.dobs, paid: false, cost: 0 });
+      const out = await spend(req.kid.id, helpCost, 'help', { word: String(req.body?.word || '').slice(0, 30) });
+      res.json(out ? { dobs: out.dobs, paid: true, cost: helpCost } : { dobs: req.kid.dobs, paid: false, cost: helpCost });
     } catch (e) {
       next(e);
     }
@@ -225,7 +228,8 @@ export function kidRouter() {
         const k = (await c.query(`SELECT last_post_date, streak, best_streak FROM kids WHERE id = $1 FOR UPDATE`, [v.kid_id])).rows[0];
         const streak = nextStreak(k.last_post_date, k.streak);
         await c.query(`UPDATE kids SET streak = $2, best_streak = GREATEST(best_streak, $2), last_post_date = $3 WHERE id = $1`, [v.kid_id, streak, dayISO()]);
-        const g = await grant(c, v.kid_id, 'post', { followers, coins: REWARDS.post.coins, meta: { video: v.id, viral, keywords: kws } });
+        const rules = await rulesForKid(v.kid_id);
+        const g = await grant(c, v.kid_id, 'studio', { followers, dobs: rules.studio, meta: { what: `Posted “${v.title || v.brief?.title}”`, video: v.id, viral, keywords: kws } });
         await c.query(`UPDATE videos SET status = 'submitted', submitted_at = now(), viral = $2, followers_awarded = $3 WHERE id = $1`, [v.id, viral, followers]);
         return { status: 200, body: { ...g, viral, keywordsSaid: kws, streak, gainedFollowers: followers } };
       });
@@ -246,7 +250,7 @@ export function kidRouter() {
 
   // ---------------------------------------------------------------- studio & shop
   r.get('/kid/shop', (req, res) => {
-    res.json({ items: SHOP, owned: req.kid.owned, coins: req.kid.coins, avatar: req.kid.avatar, decor: req.kid.decor });
+    res.json({ items: SHOP, owned: req.kid.owned, dobs: req.kid.dobs, avatar: req.kid.avatar, decor: req.kid.decor });
   });
 
   r.post('/kid/shop/buy', async (req, res, next) => {
@@ -254,10 +258,10 @@ export function kidRouter() {
       const item = SHOP.find((i) => i.id === req.body?.itemId);
       if (!item) return res.status(404).json({ error: 'Item not found' });
       if (req.kid.owned.includes(item.id)) return res.status(409).json({ error: 'You already have it' });
-      const out = await spend(req.kid.id, item.price, 'buy', { item: item.id });
-      if (!out) return res.status(402).json({ error: 'Not enough coins yet!' });
-      const k = await one(`UPDATE kids SET owned = owned || $2::jsonb WHERE id = $1 RETURNING owned, coins`, [req.kid.id, JSON.stringify([item.id])]);
-      res.json({ owned: k.owned, coins: k.coins });
+      const out = await spend(req.kid.id, item.price, 'buy', { item: item.id, what: `Bought ${item.name}` });
+      if (!out) return res.status(402).json({ error: 'Not enough Dibbly Dobs yet!' });
+      const k = await one(`UPDATE kids SET owned = owned || $2::jsonb WHERE id = $1 RETURNING owned, dobs`, [req.kid.id, JSON.stringify([item.id])]);
+      res.json({ owned: k.owned, dobs: k.dobs });
     } catch (e) {
       next(e);
     }

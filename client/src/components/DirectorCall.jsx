@@ -11,7 +11,11 @@ const NO_ANSWER_MS = 9000; // nothing said at all
 
 const DEFAULT_PLAN = { mood: 'funny', music: 'pop', ending: 'a big surprise finish', weather: 'none', backdrop: 'none', look: 'none' };
 
-export default function DirectorCall({ track, onBack, onDone }) {
+/**
+ * A voice call with an AI character. Used by the Director (Star Studio) and Story Buddy (Reading).
+ * turnUrl gets { history, plan, ...extra } and returns { say, line, plan, done }.
+ */
+export function VoiceCall({ turnUrl, extra = {}, name, variant = 'director', hint, defaultPlan = {}, onBack, onDone }) {
   const [phase, setPhase] = useState('ready'); // ready | connecting | talking | listening | thinking | tap | done | error
   const [seconds, setSeconds] = useState(0);
   const [level, setLevel] = useState(0);
@@ -46,7 +50,7 @@ export default function DirectorCall({ track, onBack, onDone }) {
   const takeTurn = useCallback(async () => {
     setPhase('thinking');
     try {
-      const turn = await api.post('/api/kid/director/turn', { history: history.current, plan: plan.current, track });
+      const turn = await api.post(turnUrl, { history: history.current, plan: plan.current, ...extra });
       if (!alive.current) return;
       plan.current = turn.plan || plan.current;
       history.current.push({ who: 'director', text: turn.say });
@@ -55,13 +59,13 @@ export default function DirectorCall({ track, onBack, onDone }) {
       if (!alive.current) return;
       if (turn.done) {
         setPhase('done');
-        setTimeout(() => alive.current && onDone({ ...DEFAULT_PLAN, ...plan.current }), 700);
+        setTimeout(() => alive.current && onDone({ ...defaultPlan, ...plan.current }), 700);
       } else listen(); // eslint-disable-line no-use-before-define
     } catch (e) {
       setError(e.message);
       setPhase('error');
     }
-  }, [track, onDone]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [turnUrl, onDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const finishAnswer = useCallback(
     (text) => {
@@ -129,7 +133,7 @@ export default function DirectorCall({ track, onBack, onDone }) {
     clearTimers();
     stopDirector();
     recRef.current?.stop();
-    onDone({ ...DEFAULT_PLAN, ...plan.current });
+    onDone({ ...defaultPlan, ...plan.current });
   };
 
   const mm = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -140,12 +144,12 @@ export default function DirectorCall({ track, onBack, onDone }) {
     listening: '',
     thinking: '',
     tap: '',
-    done: 'Cameras are yours!',
+    done: variant === 'buddy' ? 'Writing your story…' : 'Cameras are yours!',
     error: '',
   }[phase];
 
   return (
-    <div className={`screen call phase-${phase}`}>
+    <div className={`screen call phase-${phase} call-${variant}`}>
       <header className="call-top">
         <button className="icon-btn" onClick={onBack} aria-label="Back" disabled={phase !== 'ready'}>
           <svg viewBox="0 0 24 24" aria-hidden>
@@ -170,7 +174,7 @@ export default function DirectorCall({ track, onBack, onDone }) {
             </svg>
           </div>
         </div>
-        <div className="call-name">THE DIRECTOR</div>
+        <div className="call-name">{name}</div>
         <div className="call-status">{status}</div>
 
         {phase === 'listening' && (
@@ -192,7 +196,7 @@ export default function DirectorCall({ track, onBack, onDone }) {
 
       <footer className="call-dock">
         {phase === 'ready' && (
-          <button className="call-btn answer" onClick={startCall} aria-label="Call the Director">
+            <button className="call-btn answer" onClick={startCall} aria-label={`Call ${name}`}>
             <svg viewBox="0 0 24 24" aria-hidden>
               <path d="M6.6 10.8a15.2 15.2 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1z" />
             </svg>
@@ -215,8 +219,23 @@ export default function DirectorCall({ track, onBack, onDone }) {
             </svg>
           </button>
         )}
-        {phase === 'ready' && <div className="call-hint">Call the Director to plan your video</div>}
+        {phase === 'ready' && <div className="call-hint">{hint}</div>}
       </footer>
     </div>
+  );
+}
+
+export default function DirectorCall({ track, onBack, onDone }) {
+  return (
+    <VoiceCall
+      turnUrl="/api/kid/director/turn"
+      extra={{ track }}
+      name="THE DIRECTOR"
+      variant="director"
+      hint="Call the Director to plan your video"
+      defaultPlan={DEFAULT_PLAN}
+      onBack={onBack}
+      onDone={onDone}
+    />
   );
 }

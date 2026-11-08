@@ -146,6 +146,12 @@ export default function EditSuite({ brief, plan, take, existing, title, track, o
                 <div className="stat-num">{result.streak}🔥</div>
                 <div className="stat-label">day streak</div>
               </div>
+              {result.gained?.dobs > 0 && (
+                <div className="stat">
+                  <div className="stat-num">+{result.gained.dobs}</div>
+                  <div className="stat-label">Dibbly Dobs</div>
+                </div>
+              )}
               {result.keywordsSaid?.length > 0 && (
                 <div className="stat">
                   <div className="stat-num">{result.keywordsSaid.length}</div>

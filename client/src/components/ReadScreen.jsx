@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReadingTracker, UNLOCK_RATIO } from '../reading/tracker.js';
 import { createRecognizer, speechSupported } from '../speech/recognizer.js';
 import { speak } from '../speech/speak.js';
-import { CoinPill, formatCount } from './Bits.jsx';
+import { formatCount } from './Bits.jsx';
+import { DobPill } from './Dob.jsx';
 import WordHelpSheet from './WordHelpSheet.jsx';
 import KeywordSheet from './KeywordSheet.jsx';
 import { api } from '../api.js';
 import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 
-const HELP_COST = 2;
 import { unlockAudio, tick, keywordHit, greenlight, coin } from '../sfx.js';
 
 const HYPE_CALLS = [
@@ -28,7 +28,8 @@ function LockIcon({ open }) {
   );
 }
 
-export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked }) {
+export default function ReadScreen({ brief, coins = 0, helpCost = 0, onHelp, onBack, onUnlocked, mode = 'script' }) {
+  const isStory = mode === 'story';
   const tracker = useMemo(() => new ReadingTracker(brief.text, brief.keywords), [brief]);
   const [snap, setSnap] = useState(() => tracker.snapshot());
   const [mic, setMic] = useState(speechSupported() ? 'idle' : 'unsupported');
@@ -164,13 +165,13 @@ export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked })
 
   const payForHelp = (norm) => {
     if (paidWords.has(norm)) return true;
-    if (coins >= HELP_COST) {
+    if (helpCost > 0 && coins >= helpCost) {
       onHelp?.(norm);
       coin();
       setCoinBump(true);
       setTimeout(() => setCoinBump(false), 600);
     }
-    // Out of coins? Help is free. We never block a child from help.
+    // Can't afford it? Help is free. We never block a child from help.
     setPaidWords((s) => new Set(s).add(norm));
     return true;
   };
@@ -258,7 +259,7 @@ export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked })
           >
             👂
           </button>
-          <CoinPill coins={coins} bump={coinBump} />
+          <DobPill dobs={coins} bump={coinBump} />
         </div>
       </header>
 
@@ -271,7 +272,7 @@ export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked })
 
       <main className="prompter-wrap">
         <div className="script-label">
-          <span>SCRIPT</span> {brief.title}
+          <span>{isStory ? 'STORY' : 'SCRIPT'}</span> {brief.title}
         </div>
         {isLittle && (
           <div className="little-picture" aria-hidden>
@@ -375,14 +376,18 @@ export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked })
           onContextMenu={(e) => e.preventDefault()}
           aria-label={unlocked ? 'Go to filming' : 'Filming is locked'}
         >
-          {unlocked ? (
+          {unlocked && isStory ? (
+            <span className="done-star" aria-hidden>
+              ★
+            </span>
+          ) : unlocked ? (
             <svg viewBox="0 0 24 24" className="film-svg" aria-hidden>
               <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h8A2.5 2.5 0 0 1 16 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 3 16.5zM17 10l4-2.5v9L17 14z" />
             </svg>
           ) : (
             <LockIcon />
           )}
-          <span>{unlocked ? 'FILM' : 'LOCKED'}</span>
+          <span>{unlocked ? (isStory ? 'DONE' : 'FILM') : 'LOCKED'}</span>
         </button>
       </footer>
 
@@ -396,7 +401,8 @@ export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked })
         <>
           <div className="flash" />
           <div className="stamp">
-            <small>SCRIPT READ</small>GREENLIT
+            <small>{isStory ? 'STORY READ' : 'SCRIPT READ'}</small>
+            {isStory ? 'AMAZING' : 'GREENLIT'}
           </div>
         </>
       )}
@@ -407,6 +413,7 @@ export default function ReadScreen({ brief, coins, onHelp, onBack, onUnlocked })
           overrides={brief.chunks}
           paid={paidWords.has(tracker.tokens[helpIndex].norm)}
           coins={coins}
+          helpCost={helpCost}
           onPay={payForHelp}
           onClose={() => {
             setHelpIndex(null);

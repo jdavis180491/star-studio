@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
 import { coin, wrong } from '../sfx.js';
+import { DobIcon } from './Dob.jsx';
 
 const OPTIONS = {
   skin: ['s1', 's2', 's3', 's4', 's5', 's6'],
@@ -49,18 +50,18 @@ export default function StudioTab({ kid, onKid }) {
     try {
       const out = await api.post('/api/kid/shop/buy', { itemId: item.id });
       coin();
-      setShop({ ...shop, owned: out.owned, coins: out.coins });
-      onKid({ ...kid, coins: out.coins, owned: out.owned });
+      setShop({ ...shop, owned: out.owned, dobs: out.dobs });
+      onKid({ ...kid, dobs: out.dobs, owned: out.owned });
       setMsg(`${item.name} is yours!`);
       if (item.type === 'decor') {
         const decor = [...kid.decor, item.id];
         const d = await api.put('/api/kid/decor', { decor });
-        onKid({ ...kid, coins: out.coins, owned: out.owned, decor: d.decor });
+        onKid({ ...kid, dobs: out.dobs, owned: out.owned, decor: d.decor });
       } else {
         const slot = item.type;
         const value = item.id.replace(`${slot}-`, '');
         const a = await api.put('/api/kid/avatar', { avatar: { ...avatar, [slot]: value } });
-        onKid({ ...kid, coins: out.coins, owned: out.owned, avatar: a.avatar });
+        onKid({ ...kid, dobs: out.dobs, owned: out.owned, avatar: a.avatar });
       }
     } catch (e) {
       wrong();
@@ -87,6 +88,7 @@ export default function StudioTab({ kid, onKid }) {
           ['room', 'My studio'],
           ['look', 'My look'],
           ['shop', 'Shop'],
+          ['dobs', 'My Dobs'],
         ].map(([id, name]) => (
           <button key={id} className={mode === id ? 'on' : ''} onClick={() => setMode(id)}>
             {name}
@@ -145,6 +147,8 @@ export default function StudioTab({ kid, onKid }) {
         </div>
       )}
 
+      {mode === 'dobs' && <DobHistory />}
+
       {mode === 'look' && (
         <div className="look-editor">
           <Avatar avatar={avatar} size={180} ring />
@@ -188,7 +192,7 @@ export default function StudioTab({ kid, onKid }) {
                 <button key={i.id} className={`shop-item ${has ? 'owned' : ''}`} onClick={() => !has && buy(i)} disabled={has}>
                   <span className="shop-icon">{ITEM_ICONS[i.id]}</span>
                   <span className="shop-name">{i.name}</span>
-                  <span className="shop-price">{has ? 'Owned ✓' : <><span className="coin" /> {i.price}</>}</span>
+                  <span className="shop-price">{has ? 'Owned ✓' : <><DobIcon size={22} /> {i.price}</>}</span>
                 </button>
               );
             })}
@@ -226,6 +230,72 @@ export function ChannelTab({ kid }) {
               <span className={`badge ${v.status}`}>{label[v.status] || v.status}</span>
               {v.viral && <span className="trend">🔥 TRENDING</span>}
             </div>
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+}
+
+const TYPE_LABEL = {
+  studio: 'Star Studio video', reading: 'Read a story', writing: 'Wrote a story', continue: 'Continued a story',
+  spelling: 'Spelling', 'maths-addition': 'Addition', 'maths-subtraction': 'Subtraction', 'maths-bonds': 'Number bonds',
+  'maths-times': 'Times tables', buy: 'Shop', help: 'Word help', 'parent-good': 'Good behaviour 🌟',
+  'parent-naughty': 'Naughty 😬', 'parent-spent': 'Spent at the shops 🛍️', 'parent-other': 'From a grown-up',
+};
+
+function DobHistory() {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    api.get('/api/kid/dobs').then(setData);
+  }, []);
+  if (!data) return <div className="loading">Loading…</div>;
+  return (
+    <div className="dob-history">
+      <div className="dob-balance">
+        <DobIcon size={72} />
+        <div>
+          <b>{data.dobs}</b>
+          <span>Dibbly Dobs</span>
+        </div>
+      </div>
+      {!data.history.length && <div className="muted-line">Earn Dibbly Dobs by reading, writing, spelling, maths and Star Studio!</div>}
+      {data.history.map((h) => (
+        <div key={h.id} className="dob-row">
+          <span className={`dob-amt ${h.dobs > 0 ? 'plus' : 'minus'}`}>
+            {h.dobs > 0 ? '+' : ''}
+            {h.dobs}
+          </span>
+          <span className="dob-what">
+            <b>{TYPE_LABEL[h.type] || h.type}</b>
+            <span>{h.note || h.what}</span>
+          </span>
+          <span className="dob-when">{new Date(h.at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function Leaderboard({ kid }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    api.get('/api/kid/leaderboard').then(setData);
+  }, []);
+  if (!data) return <div className="loading">Loading…</div>;
+  return (
+    <main className="section-main">
+      <h1 className="hero-title small">Leaderboard</h1>
+      <div className="muted-line">Dibbly Dobs earned this week{data.crew ? ` · ${data.crew} + family` : ' · family'} · resets every Monday</div>
+      <div className="podium">
+        {data.rows.map((r, i) => (
+          <div key={r.kidId} className={`podium-row ${r.kidId === kid.id ? 'me' : ''} p${i + 1}`}>
+            <span className="pos">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</span>
+            <Avatar avatar={r.avatar} size={52} />
+            <span className="league-name">{r.channelName}</span>
+            <span className="podium-dobs">
+              <DobIcon size={26} /> {r.weekDobs}
+            </span>
           </div>
         ))}
       </div>

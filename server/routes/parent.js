@@ -14,6 +14,9 @@ import { videoForClient } from '../lib/videos.js';
 import { storageKind } from '../media/storage.js';
 import { deleteVideoFiles } from './kid.js';
 import { AVATAR_DEFAULT, FREE_ITEMS } from '../lib/catalog.js';
+import { DOB_ACTIVITIES, dobRules, grant } from '../lib/rewards.js';
+import { TIMES_TABLES, BOND_TARGETS, mathsSettings, MATHS_TYPES } from '../lib/maths.js';
+import { eventForClient } from './learn.js';
 
 const MAX_CREW = 4;
 const TRACK_OPTIONS = ['star', 'little', 'family'];
@@ -31,7 +34,8 @@ const kidForParent = (k) => ({
   yearGroup: k.year_group,
   avatar: k.avatar,
   followers: k.followers,
-  coins: k.coins,
+  dobs: k.dobs,
+  settings: k.settings,
   streak: k.streak,
 });
 
@@ -56,6 +60,8 @@ export function parentRouter() {
         keywordsPerBrief: KEYWORDS_PER_BRIEF,
         defaultVoice: DEFAULT_VOICE,
         maxCrew: MAX_CREW,
+        timesTables: TIMES_TABLES,
+        bondTargets: BOND_TARGETS,
       });
     } catch (e) {
       next(e);
@@ -101,14 +107,16 @@ export function parentRouter() {
       const channel = b.channelName !== undefined ? String(b.channelName).trim().slice(0, 30) || k.channel_name : k.channel_name;
       const track = TRACK_OPTIONS.includes(b.track) ? b.track : k.track;
       const yg = YEAR_GROUPS.includes(b.yearGroup) ? b.yearGroup : k.year_group;
+      const settings = { ...k.settings };
+      if (b.maths && typeof b.maths === 'object') settings.maths = mathsSettings({ maths: b.maths });
       let pinHash = k.pin_hash;
       if (b.pin) {
         if (!validPin(String(b.pin))) return res.status(400).json({ error: 'The PIN must be 4 digits' });
         pinHash = await hashSecret(String(b.pin));
       }
       const out = await one(
-        `UPDATE kids SET name=$2, channel_name=$3, track=$4, year_group=$5, pin_hash=$6, pin_fails=0, pin_locked_until=NULL WHERE id=$1 RETURNING *`,
-        [k.id, name, channel, track, yg, pinHash]
+        `UPDATE kids SET name=$2, channel_name=$3, track=$4, year_group=$5, pin_hash=$6, settings=$7, pin_fails=0, pin_locked_until=NULL WHERE id=$1 RETURNING *`,
+        [k.id, name, channel, track, yg, pinHash, settings]
       );
       res.json({ kid: kidForParent(out) });
     } catch (e) {
@@ -508,6 +516,146 @@ export function parentRouter() {
       await q(`DELETE FROM families WHERE id = $1`, [fam(req)]);
       await endSession(req, res);
       res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ------------------------------------------------------------- Dibbly Dobs
+  r.get('/dob-rules', async (req, res, next) => {
+    try {
+      const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
+      res.json({ activities: DOB_ACTIVITIES, rules: dobRules(f.settings) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.put('/dob-rules', async (req, res, next) => {
+    try {
+      const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
+      const rules = dobRules({ dobRules: { ...dobRules(f.settings), ...(req.body?.rules || {}) } });
+      await q(`UPDATE families SET settings = settings || $2::jsonb WHERE id = $1`, [fam(req), JSON.stringify({ dobRules: rules })]);
+      res.json({ rules });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Every Dob earned or spent, newest first, with what they did.
+  r.get('/dobs', async (req, res, next) => {
+    try {
+      const kids = await many(`SELECT * FROM kids WHERE family_id = $1 ORDER BY id`, [fam(req)]);
+      const feed = await many(
+        `SELECT e.*, k.channel_name FROM events e JOIN kids k ON k.id = e.kid_id
+          WHERE k.family_id = $1 AND e.dobs <> 0 ORDER BY e.created_at DESC LIMIT 150`,
+        [fam(req)]
+      );
+      res.json({ kids: kids.map(kidForParent), feed: feed.map((e) => ({ ...eventForClient(e), kidId: e.kid_id, channelName: e.channel_name })) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Good behaviour (+), naughty (−), spent at the shops (−), or anything else.
+  r.post('/dobs/adjust', async (req, res, next) => {
+    try {
+      const { kidId, amount, reason, note } = req.body || {};
+      const k = await one(`SELECT id, dobs FROM kids WHERE id = $1 AND family_id = $2`, [Number(kidId), fam(req)]);
+      if (!k) return res.status(404).json({ error: 'Not found' });
+      const n = Math.round(Number(amount));
+      if (!n || Math.abs(n) > 500) return res.status(400).json({ error: 'Enter an amount' });
+      const kinds = { good: 'Good behaviour', naughty: 'Naughty', spent: 'Spent at the shops', other: 'Grown-up' };
+      const type = kinds[reason] ? `parent-${reason}` : 'parent-other';
+      const signed = reason === 'naughty' || reason === 'spent' ? -Math.abs(n) : reason === 'good' ? Math.abs(n) : n;
+      if (signed < 0 && k.dobs + signed < 0 && reason === 'spent') return res.status(400).json({ error: `Only ${k.dobs} Dibbly Dobs to spend` });
+      const out = await tx((c) => grant(c, k.id, type, { dobs: signed, note: String(note || '').slice(0, 120) || null, byParent: true, meta: { what: kinds[reason] || kinds.other } }));
+      res.json(out);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ------------------------------------------------------------- letters
+  r.get('/letters', async (req, res, next) => {
+    try {
+      const rows = await many(
+        `SELECT l.*, f.channel_name AS from_name, t.channel_name AS to_name FROM letters l
+           JOIN kids f ON f.id = l.from_kid LEFT JOIN kids t ON t.id = l.to_kid
+          WHERE (f.family_id = $1 AND l.status = 'pending') OR l.to_family = $1
+          ORDER BY (l.status = 'pending') DESC, l.created_at DESC LIMIT 60`,
+        [fam(req)]
+      );
+      res.json({
+        letters: rows.map((l) => ({ id: l.id, from: l.from_name, to: l.to_family ? 'You' : l.to_name, topic: l.topic, body: l.body, status: l.status, toMe: Boolean(l.to_family), at: l.created_at })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  const ownLetter = (req) =>
+    one(`SELECT l.* FROM letters l JOIN kids f ON f.id = l.from_kid WHERE l.id = $1 AND f.family_id = $2 AND l.status = 'pending'`, [Number(req.params.id), fam(req)]);
+
+  r.post('/letters/:id/approve', async (req, res, next) => {
+    try {
+      const l = await ownLetter(req);
+      if (!l) return res.status(404).json({ error: 'Not found' });
+      await q(`UPDATE letters SET status = 'delivered' WHERE id = $1`, [l.id]);
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.post('/letters/:id/reject', async (req, res, next) => {
+    try {
+      const l = await ownLetter(req);
+      if (!l) return res.status(404).json({ error: 'Not found' });
+      await q(`UPDATE letters SET status = 'rejected' WHERE id = $1`, [l.id]);
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ------------------------------------------------------------- spelling & maths stats
+  r.get('/practice-stats', async (req, res, next) => {
+    try {
+      const kids = await many(`SELECT * FROM kids WHERE family_id = $1 ORDER BY id`, [fam(req)]);
+      const out = [];
+      for (const k of kids) {
+        const sets = await many(`SELECT * FROM practice_sets WHERE kid_id = $1 AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 200`, [k.id]);
+        const spelling = sets.filter((s) => s.kind === 'spelling');
+        const tricky = {};
+        for (const s of spelling) s.items.forEach((it, i) => {
+          const r2 = s.results?.[i];
+          if (r2 && (!r2.correct || r2.gaveUp || r2.tries > 1)) tricky[it.word] = (tricky[it.word] || 0) + 1;
+        });
+        const maths = MATHS_TYPES.map((t) => {
+          const ss = sets.filter((s) => s.kind === 'maths' && s.type === t.id);
+          const right = ss.reduce((a, s) => a + (s.score || 0), 0);
+          const total = ss.reduce((a, s) => a + s.items.length, 0);
+          return { type: t.id, name: t.name, sets: ss.length, accuracy: total ? Math.round((100 * right) / total) : null };
+        });
+        const letters = await one(`SELECT count(*)::int AS n FROM letters WHERE from_kid = $1`, [k.id]);
+        const stories = await one(`SELECT count(*)::int AS n, COALESCE(sum(reads),0)::int AS reads FROM stories WHERE kid_id = $1`, [k.id]);
+        out.push({
+          kidId: k.id,
+          channelName: k.channel_name,
+          spelling: {
+            sets: spelling.length,
+            accuracy: spelling.length ? Math.round((100 * spelling.reduce((a, s) => a + (s.score || 0), 0)) / spelling.reduce((a, s) => a + s.items.length, 0)) : null,
+            tricky: Object.entries(tricky).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([word, times]) => ({ word, times })),
+          },
+          maths,
+          writing: letters.n,
+          stories: stories.n,
+          storyReads: stories.reads,
+          mathsSettings: mathsSettings(k.settings),
+        });
+      }
+      res.json({ kids: out });
     } catch (e) {
       next(e);
     }
