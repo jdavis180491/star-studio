@@ -4048,3 +4048,74 @@ a.btn {
     width: 100%;
   }
 }
+
+/* Terms & Privacy reader */
+.consent label {
+  flex: 1;
+}
+.link.inline {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  color: var(--lime);
+  text-decoration: underline;
+}
+.doc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+}
+.doc-panel {
+  position: relative;
+  width: min(720px, 100%);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--panel, #16161d);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 24px 20px;
+  text-align: left;
+}
+.doc {
+  -webkit-user-select: text;
+  user-select: text;
+  line-height: 1.55;
+  font-size: 15px;
+}
+.doc h2 {
+  margin: 0 40px 4px 0;
+}
+.doc h3 {
+  margin: 22px 0 6px;
+  font-size: 17px;
+}
+.doc ul {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.doc li {
+  margin: 4px 0;
+}
+.doc-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 18px;
+}
+.doc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}

@@ -5,6 +5,7 @@ import Avatar from '../components/Avatar.jsx';
 import { tokenizeBrief, normalizeWord, isKeywordForm } from '../reading/words.js';
 import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 import { unlockAudio } from '../sfx.js';
+import { PrivacySheet } from './Privacy.jsx';
 
 const TABS = [
   ['kids', 'Kids'],
@@ -16,8 +17,8 @@ const TABS = [
   ['stats', 'Reading stats'],
   ['settings', 'Settings'],
 ];
-const TRACK_NAME = { star: 'Main brief (age 7+)', little: 'Little Stars (age 4-6)' };
-const MODE_NAME = { star: 'Main', little: 'Little Stars', family: 'Family channel (both)' };
+const TRACK_NAME = { star: 'Older (7 and above)', little: 'Young (5 and below)' };
+const MODE_NAME = { star: 'Older', little: 'Young', family: 'Family channel' };
 
 export default function ParentApp() {
   const [me, setMe] = useState(null);
@@ -61,12 +62,13 @@ export default function ParentApp() {
         </div>
       </header>
 
+      {!(status.claude && status.voice && status.storage === 'replit') && (
       <div className="status-row">
-        <Pill on={status.claude} label={status.claude ? 'Claude on' : 'Claude off: add ANTHROPIC_API_KEY'} />
-        <Pill on={status.voice} label={status.voice ? 'Director voice on' : 'Voice off: add ELEVENLABS_API_KEY'} />
-        <Pill on={status.storage === 'replit'} label={status.storage === 'replit' ? 'Video storage on' : 'Videos on temporary disk: switch on App Storage'} />
-        <Pill on={status.transcribe} soft label={status.transcribe ? 'On-camera words: on' : 'On-camera words: off (optional OPENAI_API_KEY)'} />
+        {!status.claude && <Pill label="AI is off: add ANTHROPIC_API_KEY" />}
+        {!status.voice && <Pill label="Voice is off: add ELEVENLABS_API_KEY" />}
+        {status.storage !== 'replit' && <Pill label="Videos on temporary disk: switch on App Storage" />}
       </div>
+      )}
 
       <nav className="tabs">
         {TABS.map(([id, label]) => (
@@ -119,6 +121,7 @@ function Auth({ onIn }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [consent, setConsent] = useState(false);
+  const [reading, setReading] = useState(false);
   const { busy, err, run } = useAction();
 
   const submit = (e) => {
@@ -147,15 +150,15 @@ function Auth({ onIn }) {
           onChange={(e) => setPassword(e.target.value)}
         />
         {mode === 'signup' && (
-          <label className="consent">
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-            <span>
-              I’m the parent or guardian. I agree that my children’s <b>voice and video</b> are processed by AI services to run the game: Anthropic Claude
-              (writing briefs, the Director’s replies and video edits, from speech transcripts), ElevenLabs (the Director’s voice), the device’s speech
-              recognition, and optionally OpenAI Whisper (transcribing what’s said on camera). Children’s names are never sent to these services. Videos
-              are private to our invite-only crew and I can delete them at any time.
-            </span>
-          </label>
+          <div className="consent">
+            <input id="accept-terms" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            <label htmlFor="accept-terms">
+              I’m the parent or guardian and I accept the{' '}
+              <button type="button" className="link inline" onClick={() => setReading(true)}>
+                Terms &amp; Privacy
+              </button>
+            </label>
+          </div>
         )}
         {err && <div className="notice">{err}</div>}
         <button className="big-btn primary" type="submit" disabled={Boolean(busy)}>
@@ -165,6 +168,15 @@ function Auth({ onIn }) {
           {mode === 'signup' ? 'Already have an account? Log in' : 'New here? Create an account'}
         </button>
       </form>
+      {reading && (
+        <PrivacySheet
+          onAccept={() => {
+            setConsent(true);
+            setReading(false);
+          }}
+          onClose={() => setReading(false)}
+        />
+      )}
     </div>
   );
 }
@@ -238,17 +250,15 @@ function Kids({ status }) {
   if (!kids) return <div className="muted">Loading…</div>;
   return (
     <section>
-      <p className="muted">
-        Each child logs in on this iPad by tapping their avatar and entering their 4-digit PIN. Their real name stays here; the app and the AI only use the
-        channel name.
-      </p>
       {kids.map((k) => (
         <div key={k.id} className="p-card row">
           <Avatar avatar={k.avatar} size={64} />
           <div className="grow">
-            <h2>{k.channelName}</h2>
+            <h2>
+              {k.name} <span className="muted">({k.channelName})</span>
+            </h2>
             <div className="muted">
-              {k.name} · {MODE_NAME[k.track]} · {status.yearGroups.find((y) => y.id === k.yearGroup)?.label} · {k.dobs} Dibbly Dobs
+              {MODE_NAME[k.track]} · {status.yearGroups.find((y) => y.id === k.yearGroup)?.label} · {k.dobs} Dibbly Dobs
             </div>
           </div>
           <button
@@ -277,19 +287,19 @@ function Kids({ status }) {
           <h2>{edit.id ? 'Edit profile' : 'New profile'}</h2>
           <div className="p-form">
             <label>
-              Child’s name (private: only you see this)
+              Child’s name
               <input value={edit.name} maxLength={40} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
             </label>
             <label>
-              Name in the app (their channel name: friends see this, so don’t use their real name)
+              Nickname (this is the name that appears to others in the app)
               <input value={edit.channelName} maxLength={30} onChange={(e) => setEdit({ ...edit, channelName: e.target.value })} />
             </label>
             <label>
-              Mode
+              Star Studio mode
               <select value={edit.track} onChange={(e) => setEdit({ ...edit, track: e.target.value, yearGroup: e.target.value === 'little' ? 'R' : edit.yearGroup })}>
-                <option value="star">Main (about 7+)</option>
-                <option value="little">Little Stars (about 4-6)</option>
-                <option value="family">Family channel: siblings share one channel and can play both</option>
+                <option value="little">Young (5 and below)</option>
+                <option value="star">Older (7 and above)</option>
+                {edit.track === 'family' && <option value="family">Family channel (no longer offered)</option>}
               </select>
             </label>
             <label>
@@ -338,7 +348,8 @@ function Kids({ status }) {
               </>
             )}
             <label>
-              {edit.id ? 'New 4-digit PIN (leave empty to keep it)' : '4-digit PIN'}
+              {edit.id ? 'New 4-digit PIN (leave empty to keep it)' : '4-digit PIN'}{' '}
+              <span className="muted">(to log in, your child taps their picture, then types this)</span>
               <input inputMode="numeric" maxLength={4} value={edit.pin} onChange={(e) => setEdit({ ...edit, pin: e.target.value.replace(/\D/g, '') })} />
             </label>
           </div>
