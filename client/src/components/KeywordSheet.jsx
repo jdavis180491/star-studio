@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRecognizer } from '../speech/recognizer.js';
 import { heardWord } from '../reading/tracker.js';
-import { speak } from '../speech/speak.js';
+import { say } from '../speech/say.js';
 
 // Practise one star word on its own. Very forgiving: after 3 goes we count it anyway.
 const MAX_TRIES = 3;
@@ -55,7 +55,7 @@ export default function KeywordSheet({ word, onDone, onClose }) {
   }, [word]);
 
   useEffect(() => {
-    if (state === 'yes') speak('Yes!', { rate: 1 });
+    if (state === 'yes') say('Yes!');
   }, [state]);
 
   const listen = () => {

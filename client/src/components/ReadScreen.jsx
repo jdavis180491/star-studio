@@ -10,6 +10,7 @@ import { api } from '../api.js';
 import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 
 import { unlockAudio, tick, keywordHit, greenlight } from '../sfx.js';
+import { say } from '../speech/say.js';
 
 const HYPE_CALLS = [
   [0.3, 'CHAT IS WAKING UP'],
@@ -206,14 +207,8 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     primeDirectorAudio();
     pauseForSheet();
     setListenFirst('playing');
-    try {
-      const track = brief.track || (isLittle ? 'little' : 'star');
-      const { line } = brief.source === 'sample' ? { line: null } : await api.post('/api/kid/director/read-brief', { track });
-      if (line) await playLines([line]);
-      else await speak(brief.text, { rate: 0.8 });
-    } catch {
-      await speak(brief.text, { rate: 0.8 });
-    }
+    // Read out exactly what's on screen (the brief or their story) in the app's voice.
+    await say(brief.text);
     setListenFirst('done');
   };
 

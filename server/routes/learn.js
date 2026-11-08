@@ -6,6 +6,7 @@ import { requireKid } from '../auth.js';
 import { earnDobs, dobLeaderboard, DOB_VALUES } from '../lib/rewards.js';
 import { later, notifyFamily } from '../lib/notify.js';
 import { practiceWords, wordsForKid } from '../lib/keywords.js';
+import { levelFor } from '../lib/levels.js';
 import { familySettings, crewForKid } from '../lib/family.js';
 import { wordsFor, pickWords } from '../data/wordBank.js';
 import { pickTopic } from '../data/topics.js';
@@ -16,6 +17,8 @@ import { registerLine } from '../ai/voice.js';
 import { chunkWord } from '../../client/src/reading/phonics.js';
 
 const newId = () => crypto.randomBytes(9).toString('base64url').replace(/[^a-zA-Z0-9]/g, 'x');
+// A story or letter must have at least this many words to send (and earn its Dob).
+export const MIN_WRITING_WORDS = 15;
 const isYoung = (kid) => kid.track === 'little' || kid.year_group === 'R';
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -24,11 +27,36 @@ async function familyOf(kid) {
   return familySettings(f?.settings);
 }
 
+/** Words to try in a story: their keywords, or words for their writing level if that's different. */
+async function writingWords(kid) {
+  const level = levelFor(kid, 'writing');
+  const k = await wordsForKid(kid);
+  if (k.source !== 'auto' || level === levelFor(kid, 'reading')) return k.words.slice(0, 2);
+  return pickWords(wordsFor(level, { little: level === 'R' }), 2);
+}
+
 const voiceId = async (kid) => (await familyOf(kid)).directorVoiceId;
 
 export function learnRouter() {
   const r = express.Router();
   r.use('/kid', requireKid);
+
+  // ================================================================ VOICE
+  // Anything the kids' app reads out (word help, the word moment, a story) uses the same
+  // ElevenLabs voice as the rest of the app. The app falls back to the iPad voice if it's off.
+  r.post('/kid/say', rateLimit({ perMinute: 90 }), async (req, res, next) => {
+    try {
+      const texts = (Array.isArray(req.body?.texts) ? req.body.texts : [req.body?.text])
+        .map((t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 1500))
+        .filter(Boolean)
+        .slice(0, 10);
+      if (!texts.length) return res.status(400).json({ error: 'Nothing to say' });
+      const v = await voiceId(req.kid);
+      res.json({ lines: texts.map((t) => registerLine(t, v)) });
+    } catch (e) {
+      next(e);
+    }
+  });
 
   // ================================================================ READING
   r.post('/kid/story/turn', rateLimit({ perMinute: 40 }), async (req, res, next) => {
@@ -133,7 +161,7 @@ export function learnRouter() {
   r.get('/kid/writing/topic', async (req, res, next) => {
     try {
       const to = String(req.query.to || 'your friend').slice(0, 30);
-      res.json({ topic: pickTopic(to, String(req.query.not || '')), tryWords: (await wordsForKid(req.kid)).words.slice(0, 2) });
+      res.json({ topic: pickTopic(to, String(req.query.not || '')), tryWords: await writingWords(req.kid) });
     } catch (e) {
       next(e);
     }
@@ -164,7 +192,8 @@ export function learnRouter() {
     try {
       const kid = req.kid;
       const body = String(req.body?.body || '').trim().slice(0, 4000);
-      if (body.split(/\s+/).length < 3) return res.status(400).json({ error: 'Write a little bit more first!' });
+      const realWords = body.split(/\s+/).filter((w) => /[a-z]/i.test(w)).length;
+      if (realWords < MIN_WRITING_WORDS) return res.status(400).json({ error: `Write at least ${MIN_WRITING_WORDS} words first! (${realWords} so far)` });
       const topic = String(req.body?.topic || '').slice(0, 200);
       let threadId = req.body?.threadId ? Number(req.body.threadId) : null;
       let toKid = null;
@@ -299,7 +328,7 @@ export function learnRouter() {
     try {
       const type = String(req.body?.type || '');
       if (!MATHS_TYPES.some((t) => t.id === type)) return res.status(400).json({ error: 'Unknown maths type' });
-      const questions = makeSet(type, req.kid.year_group, req.kid.settings);
+      const questions = makeSet(type, levelFor(req.kid, 'maths'), req.kid.settings);
       const id = newId();
       await q(`INSERT INTO practice_sets (id, kid_id, kind, type, items) VALUES ($1,$2,'maths',$3,$4)`, [id, req.kid.id, type, JSON.stringify(questions)]);
       res.json({ setId: id, type, questions });

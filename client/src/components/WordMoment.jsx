@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { speak } from '../speech/speak.js';
+import { say, primeDirectorAudio } from '../speech/say.js';
 import { normalizeWord, isKeywordForm, levenshtein } from '../reading/words.js';
 import { unlockAudio, tick, wrong, greenlight } from '../sfx.js';
 
@@ -57,7 +57,8 @@ function SpellTiles({ word, effect, little, onDone }) {
 
   const hear = () => {
     unlockAudio();
-    speak(word, { rate: 0.8 });
+    primeDirectorAudio();
+    say(word);
   };
 
   const tap = (t) => {
@@ -71,7 +72,7 @@ function SpellTiles({ word, effect, little, onDone }) {
       setMisses(0);
       if (n === letters.length) {
         greenlight();
-        setTimeout(() => speak(word, { rate: 0.9 }), 500);
+        setTimeout(() => say(word), 500);
       }
     } else {
       wrong();

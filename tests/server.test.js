@@ -142,3 +142,13 @@ test('admins come from the ADMIN_EMAILS secret', () => {
   process.env.ADMIN_EMAILS = was || '';
   assert.equal(isAdminEmail(''), false);
 });
+
+import { levelFor, cleanLevels } from '../server/lib/levels.js';
+
+test('subject levels follow reading unless set', () => {
+  const kid = { year_group: 'Y3', settings: { levels: { maths: 'Y5' } } };
+  assert.equal(levelFor(kid, 'reading'), 'Y3');
+  assert.equal(levelFor(kid, 'maths'), 'Y5');
+  assert.equal(levelFor(kid, 'spelling'), 'Y3', 'not set: same as reading');
+  assert.deepEqual(cleanLevels({ writing: 'Y9', spelling: 'Y1', maths: '' }), { spelling: 'Y1' });
+});

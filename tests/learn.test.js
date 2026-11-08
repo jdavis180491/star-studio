@@ -95,14 +95,17 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   assert.match(topic.topic, /Cat TV/);
   assert.equal((await A.post('/api/kid/writing/check', { text: 'I went to the parc becos' })).data.unavailable, true, 'spell check needs Claude');
   // to a sibling: delivered straight away
-  r = (await A.post('/api/kid/letters', { to: { kidId: a2.id }, topic: 'Hi', body: 'Dear Bob, a penguin is in the bath.' })).data;
+  const short = await A.post('/api/kid/letters', { to: { kidId: a2.id }, topic: 'Hi', body: 'Dear Bob, a penguin is in the bath.' });
+  assert.equal(short.status, 400, 'at least 15 words to send and earn a Dob');
+  assert.match(short.data.error, /15 words/);
+  r = (await A.post('/api/kid/letters', { to: { kidId: a2.id }, topic: 'Hi', body: 'Dear Bob, a penguin is in the bath and he will not get out because he loves the bubbles.' })).data;
   assert.equal(r.status, 'delivered');
   assert.equal(r.gained.dobs, 1);
   // to a crew friend: waits for grown-up A
-  r = (await A.post('/api/kid/letters', { to: { kidId: b1.id }, topic: topic.topic, body: 'Dear Cat, my shoes started talking today!' })).data;
+  r = (await A.post('/api/kid/letters', { to: { kidId: b1.id }, topic: topic.topic, body: 'Dear Cat, my shoes started talking today and they would not stop singing songs about cheese all day long!' })).data;
   assert.equal(r.status, 'pending');
   // can't write to a stranger
-  assert.equal((await A.post('/api/kid/letters', { to: { kidId: 9999 }, body: 'hello there you' })).status, 400);
+  assert.equal((await A.post('/api/kid/letters', { to: { kidId: 9999 }, body: 'hello there you, this is a story about a big red bus that can fly over the town' })).status, 400);
   // B can't see it yet
   await B.post('/api/kid/login', { kidId: b1.id, pin: '3333' });
   assert.equal((await B.get('/api/kid/letters')).data.inbox.length, 0);
@@ -116,7 +119,7 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   const thread = (await B.get(`/api/kid/letters/thread/${inbox[0].threadId}`)).data;
   assert.equal(thread.canContinue, true);
   // B continues the story → back to A, waits for B's grown-up
-  r = (await B.post('/api/kid/letters', { threadId: inbox[0].threadId, body: 'Then my socks joined in and sang!' })).data;
+  r = (await B.post('/api/kid/letters', { threadId: inbox[0].threadId, body: 'Then my socks joined in and sang the loudest song you have ever heard in your whole life!' })).data;
   assert.equal(r.status, 'pending');
   const bPending = (await B.get('/api/parent/letters')).data.letters.find((l) => l.status === 'pending');
   await B.post(`/api/parent/letters/${bPending.id}/approve`);
@@ -163,6 +166,17 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   const board = (await A.get('/api/kid/leaderboard')).data;
   assert.deepEqual(board.rows.map((x) => x.channelName).sort(), ['Ann TV', 'Bob TV', 'Cat TV']);
   assert.equal(board.rows[0].channelName, 'Ann TV');
+
+  // ---------------- Levels per subject: maths at Reception while reading stays at Year 3
+  let kid = (await A.put(`/api/parent/kids/${a1.id}`, { levels: { maths: 'R', writing: 'nonsense' } })).data.kid;
+  assert.deepEqual(kid.levels, { maths: 'R' }, 'unknown levels mean "same as reading"');
+  const easy = (await A.post('/api/kid/maths/start', { type: 'addition' })).data;
+  assert.ok(easy.questions.every((q) => q.answer <= 10), 'maths follows its own level');
+  kid = (await A.put(`/api/parent/kids/${a1.id}`, { levels: {} })).data.kid;
+  assert.deepEqual(kid.levels, {}, 'back to following reading');
+  const said = (await A.post('/api/kid/say', { texts: ['dr', 'ag', 'on', 'dragon'] })).data;
+  assert.equal(said.lines.length, 4, 'word help is read in the app’s voice');
+  assert.ok(said.lines.every((l) => l.id));
 
   // ---------------- Phone notifications
   let n = (await A.get('/api/parent/notifications')).data;
