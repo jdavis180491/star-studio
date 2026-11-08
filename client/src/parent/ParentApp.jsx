@@ -7,18 +7,18 @@ import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 import { unlockAudio } from '../sfx.js';
 import { PrivacySheet } from './Privacy.jsx';
 import NotificationsCard from './Notifications.jsx';
+import { Keywords, AdminBriefs } from './Words.jsx';
 
 const TABS = [
   ['kids', 'Kids'],
   ['dobs', 'Dibbly Dobs'],
   ['approvals', 'Approvals'],
-  ['briefs', 'Daily briefs'],
+  ['briefs', 'Daily briefs', 'admin'],
   ['keywords', 'Keywords'],
   ['crews', 'Crews'],
   ['stats', 'Reading stats'],
   ['settings', 'Settings'],
 ];
-const TRACK_NAME = { star: 'Older (7 and above)', little: 'Young (5 and below)' };
 const MODE_NAME = { star: 'Older', little: 'Young', family: 'Family channel' };
 
 export default function ParentApp() {
@@ -76,7 +76,7 @@ export default function ParentApp() {
       )}
 
       <nav className="tabs">
-        {TABS.map(([id, label]) => (
+        {TABS.filter(([, , who]) => !who || status.admin).map(([id, label]) => (
           <button key={id} className={`tab ${tab === id ? 'on' : ''}`} onClick={() => setTab(id)}>
             {label}
             {id === 'approvals' && pending > 0 && <span className="count-badge">{pending}</span>}
@@ -88,8 +88,8 @@ export default function ParentApp() {
         {tab === 'kids' && <Kids status={status} />}
         {tab === 'dobs' && <Dobs />}
         {tab === 'approvals' && <Approvals onChange={load} />}
-        {tab === 'briefs' && <Briefs status={status} />}
-        {tab === 'keywords' && <Keywords status={status} />}
+        {tab === 'briefs' && status.admin && <AdminBriefs />}
+        {tab === 'keywords' && <Keywords />}
         {tab === 'crews' && <Crews status={status} />}
         {tab === 'stats' && <Stats />}
         {tab === 'settings' && <Settings status={status} />}
@@ -462,266 +462,6 @@ function Approvals({ onChange }) {
 }
 
 // ------------------------------------------------------------- briefs
-function Highlighted({ text, keywords }) {
-  const kws = keywords.map(normalizeWord);
-  return (
-    <p className="p-brief">
-      {tokenizeBrief(text).map((t, i) => (
-        <React.Fragment key={i}>
-          <span className={kws.some((k) => isKeywordForm(k, t.norm)) ? 'p-kw' : ''}>{t.display}</span>{' '}
-        </React.Fragment>
-      ))}
-    </p>
-  );
-}
-
-const fmt = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-
-function Briefs({ status }) {
-  const [scopes, setScopes] = useState(null);
-  const [scope, setScope] = useState(null);
-  const [day, setDay] = useState('today');
-  const [data, setData] = useState(null);
-  const date = day === 'today' ? status.today : status.tomorrow;
-
-  useEffect(() => {
-    api.get('/api/parent/briefs/scopes').then((d) => {
-      setScopes(d);
-      setScope((s) => s || d.scopes[0]?.scope || null);
-    });
-  }, []);
-  const load = useCallback(() => {
-    if (!scope) return;
-    setData(null);
-    api.get(`/api/parent/briefs?scope=${encodeURIComponent(scope)}&date=${date}`).then(setData);
-  }, [scope, date]);
-  useEffect(load, [load]);
-
-  if (!scopes) return <div className="muted">Loading…</div>;
-  if (!scopes.scopes.length) {
-    return (
-      <section>
-        <div className="muted">
-          {scopes.hostedElsewhere.length
-            ? `Your children's crew (${scopes.hostedElsewhere.join(', ')}) gets its daily brief from the crew's host family.`
-            : 'Add a child first.'}
-        </div>
-      </section>
-    );
-  }
-  return (
-    <section>
-      <p className="muted">
-        Everyone in a crew gets the same brief each day. Approve tomorrow’s the night before. Until you approve one, kids get a built-in practice brief.
-      </p>
-      {scopes.scopes.length > 1 && (
-        <div className="seg">
-          {scopes.scopes.map((s) => (
-            <button key={s.scope} className={scope === s.scope ? 'on' : ''} onClick={() => setScope(s.scope)}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="muted small">For: {scopes.scopes.find((s) => s.scope === scope)?.members.join(', ')}</div>
-      <div className="seg">
-        <button className={day === 'today' ? 'on' : ''} onClick={() => setDay('today')}>
-          Today · {fmt(status.today)}
-        </button>
-        <button className={day === 'tomorrow' ? 'on' : ''} onClick={() => setDay('tomorrow')}>
-          Tomorrow · {fmt(status.tomorrow)}
-        </button>
-      </div>
-      {!data && <div className="muted">Loading…</div>}
-      {data &&
-        ['star', 'little'].map((track) => (
-          <BriefCard key={`${scope}-${date}-${track}`} scope={scope} track={track} date={date} brief={data[track]} sample={data.samples[track]} status={status} onChange={load} hasMain={Boolean(data.star)} />
-        ))}
-    </section>
-  );
-}
-
-function BriefCard({ scope, track, date, brief, sample, status, onChange, hasMain }) {
-  const { busy, err, run } = useAction();
-  const [problems, setProblems] = useState([]);
-  const [editing, setEditing] = useState(false);
-  const [theme, setTheme] = useState('');
-  const [draft, setDraft] = useState({ title: '', text: '', keywords: '' });
-
-  const generate = () =>
-    run('Claude is writing…', async () => {
-      const out = await api.post('/api/parent/briefs/generate', { scope, date, track, theme });
-      setProblems(out.problems || []);
-      onChange();
-    });
-  const approve = () => run('Approving…', async () => (await api.post('/api/parent/briefs/approve', { scope, date, track }), onChange()));
-  const saveEdit = () =>
-    run('Saving…', async () => {
-      const out = await api.put('/api/parent/briefs', { scope, date, track, ...draft });
-      setProblems(out.problems || []);
-      setEditing(false);
-      onChange();
-    });
-
-  const state = !brief ? 'none' : brief.status;
-  return (
-    <div className="p-card">
-      <div className="p-card-head">
-        <h2>{TRACK_NAME[track]}</h2>
-        <span className={`badge ${state}`}>{state === 'none' ? 'Not written' : state === 'approved' ? 'Approved ✓' : 'Draft: needs approval'}</span>
-      </div>
-      {!brief && <div className="muted">Until you approve one, kids get the practice brief “{sample?.title}”.</div>}
-      {track === 'little' && !brief && hasMain && <div className="muted">Tip: Claude will make a simple version of today’s main brief.</div>}
-      {brief && !editing && (
-        <>
-          <div className="p-title">
-            {brief.picture} {brief.title}
-          </div>
-          <Highlighted text={brief.text} keywords={brief.keywords} />
-          <div className="p-keywords">Keywords: {brief.keywords.join(', ')}</div>
-        </>
-      )}
-      {editing && (
-        <div className="p-form">
-          <label>
-            Title
-            <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} maxLength={40} />
-          </label>
-          <label>
-            Brief
-            <textarea rows={5} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
-          </label>
-          <label>
-            Keywords (must appear in the brief)
-            <input value={draft.keywords} onChange={(e) => setDraft({ ...draft, keywords: e.target.value })} />
-          </label>
-        </div>
-      )}
-      {problems.length > 0 && <div className="notice soft">{problems.join(' ')}</div>}
-      {err && <div className="notice">{err}</div>}
-      {!editing && (
-        <div className="p-theme">
-          <input placeholder="Optional theme (pirates, a talking fridge… or let your child pick tomorrow’s!)" value={theme} maxLength={120} onChange={(e) => setTheme(e.target.value)} />
-        </div>
-      )}
-      <div className="p-actions">
-        {busy ? (
-          <span className="muted">{busy}</span>
-        ) : editing ? (
-          <>
-            <button className="btn primary" onClick={saveEdit}>
-              Save changes
-            </button>
-            <button className="btn" onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="btn" onClick={generate} disabled={!status.claude}>
-              {brief ? '↻ Write a new one' : '✨ Write with Claude'}
-            </button>
-            <button
-              className="btn"
-              onClick={() => {
-                setDraft({ title: brief?.title || '', text: brief?.text || '', keywords: (brief?.keywords || []).join(', ') });
-                setEditing(true);
-              }}
-            >
-              ✎ {brief ? 'Edit' : 'Write my own'}
-            </button>
-            {brief && brief.status !== 'approved' && (
-              <button className="btn primary" onClick={approve}>
-                Approve for the kids
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------- keywords
-const asText = (v) => (Array.isArray(v) ? v.join(', ') : v || '');
-
-function Keywords({ status }) {
-  const [settings, setSettings] = useState(null);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    api.get('/api/parent/settings').then(setSettings);
-  }, []);
-  if (!settings) return <div className="muted">Loading…</div>;
-  const update = (track, patch) => {
-    setSaved(false);
-    setSettings((s) => ({ ...s, [track]: { ...s[track], ...patch } }));
-  };
-  const save = async () => {
-    setSettings(await api.put('/api/parent/settings', { star: settings.star, little: settings.little }));
-    setSaved(true);
-  };
-  return (
-    <section>
-      <p className="muted">
-        Each daily brief uses {status.keywordsPerBrief.star} main words and {status.keywordsPerBrief.little} Little Stars word, rotating through your list.
-        In a crew, every family’s words take turns. Leave a list empty and the built-in phonics word bank suggests words for the year group.
-      </p>
-      {['star', 'little'].map((track) => (
-        <KeywordTrack key={track} track={track} s={settings[track]} status={status} update={(p) => update(track, p)} />
-      ))}
-      <div className="p-actions">
-        <button className="btn primary" onClick={save}>
-          Save keywords
-        </button>
-        {saved && <span className="saved">Saved ✓</span>}
-      </div>
-    </section>
-  );
-}
-
-function KeywordTrack({ track, s, status, update }) {
-  const [dayText, setDayText] = useState(asText(s.todayWords?.[status.tomorrow]));
-  const suggest = async () => {
-    const { words } = await api.get(`/api/parent/wordbank/suggest?year=${s.yearGroup}&track=${track}&n=${track === 'little' ? 5 : 10}`);
-    update({ weeklyWords: words.join(', ') });
-  };
-  return (
-    <div className="p-card">
-      <h2>{TRACK_NAME[track]}</h2>
-      <div className="p-form">
-        <label>
-          Year group
-          <select value={s.yearGroup} onChange={(e) => update({ yearGroup: e.target.value })}>
-            {status.yearGroups.map((y) => (
-              <option key={y.id} value={y.id}>
-                {y.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          This week’s words (e.g. the school spelling list)
-          <textarea rows={3} value={asText(s.weeklyWords)} onChange={(e) => update({ weeklyWords: e.target.value })} placeholder="because, whisper, monster…" />
-        </label>
-        <button className="btn small" onClick={suggest}>
-          Suggest from word bank
-        </button>
-        <label>
-          Words for tomorrow only (optional)
-          <input
-            value={dayText}
-            onChange={(e) => {
-              setDayText(e.target.value);
-              update({ todayWords: { ...(s.todayWords || {}), [status.tomorrow]: e.target.value } });
-            }}
-          />
-        </label>
-      </div>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------- crews
 function Crews({ status }) {
   const [crews, setCrews] = useState(null);
   const [kids, setKids] = useState([]);

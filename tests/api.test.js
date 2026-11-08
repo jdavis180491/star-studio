@@ -52,7 +52,7 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-data-'));
   const server = spawn(process.execPath, [path.resolve('server/index.js')], {
     cwd: dataDir,
-    env: { ...process.env, DATABASE_URL: url, PORT: String(PORT), SESSION_SECRET: 'test', ANTHROPIC_API_KEY: '', ELEVENLABS_API_KEY: '', OPENAI_API_KEY: '', REPL_ID: '' },
+    env: { ...process.env, DATABASE_URL: url, PORT: String(PORT), SESSION_SECRET: 'test', ANTHROPIC_API_KEY: '', ELEVENLABS_API_KEY: '', OPENAI_API_KEY: '', REPL_ID: '', ADMIN_EMAILS: 'Admin@Test.com, a@test.com' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -81,10 +81,13 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   const noHeader = await fetch(`${BASE}/api/parent/kids`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   assert.equal(noHeader.status, 403);
 
-  // Keywords + a brief written by hand and approved
-  await A.put('/api/parent/settings', { star: { weeklyWords: 'rocket, planet, gravity, orbit' } });
-  const scopes = (await A.get('/api/parent/briefs/scopes')).data.scopes;
-  assert.equal(scopes[0].scope.startsWith('f:'), true);
+  // A is an admin (ADMIN_EMAILS); keywords are automatic until a grown-up chooses some
+  const status = (await A.get('/api/parent/status')).data;
+  assert.equal(status.admin, true);
+  const today = status.today;
+  let kws = (await A.get('/api/parent/keywords')).data;
+  assert.equal(kws.kids[0].source, 'auto');
+  assert.equal(kws.kids[0].today.length, 3, 'older children get 3 words a day');
 
   // --- Kid A logs in with the PIN (wrong PIN first)
   assert.equal((await A.post('/api/kid/login', { kidId: kidA.id, pin: '9999' })).status, 401);
@@ -97,7 +100,6 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   const B = client();
   await B.post('/api/auth/signup', { email: 'b@test.com', password: 'password2', consent: true });
   const kidB = (await B.post('/api/parent/kids', { name: 'Real Name B', channelName: 'Dino Den', pin: '5555', track: 'star' })).data.kid;
-  await B.put('/api/parent/settings', { star: { weeklyWords: ['dinosaur', 'roar'] } });
   // A is still in parent mode (signup grants 30 minutes)
   const crew = (await A.post('/api/parent/crews', { name: 'Best Buds', kidIds: [kidA.id] })).data.crew;
   assert.match(crew.code, /^[A-Z0-9]{6}$/);
@@ -105,23 +107,52 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal((await B.post('/api/parent/crews/join', { code: crew.code, kidIds: [kidB.id] })).status, 200);
   assert.equal((await B.post('/api/parent/crews/join', { code: crew.code, kidIds: [kidB.id] })).status, 409, 'one crew per child');
 
-  // Host writes + approves today's crew brief; keywords come from both families
-  const scope = `c:${crew.id}`;
-  const today = (await A.get('/api/parent/status')).data.today;
-  assert.equal((await B.post('/api/parent/briefs/approve', { scope, date: today, track: 'star' })).status, 403, 'only host manages crew brief');
-  const put = await A.put('/api/parent/briefs', {
-    scope, date: today, track: 'star', title: 'Rocket Run',
-    text: 'Your rocket is about to launch to a strange planet full of dinosaurs. Count down from ten in your loudest voice, then float around like there is no gravity at all. Finish with a big dinosaur roar!',
-    keywords: 'rocket, planet, dinosaur',
-  });
-  assert.deepEqual(put.data.problems, []);
-  assert.equal((await A.post('/api/parent/briefs/approve', { scope, date: today, track: 'star' })).status, 200);
+  // Only the admin sees the Daily briefs tab; nobody can change today's brief
+  assert.equal((await B.get('/api/parent/status')).data.admin, false);
+  assert.equal((await B.get('/api/parent/admin/briefs')).status, 403, 'not an admin');
+  const plan14 = (await A.get('/api/parent/admin/briefs')).data.days;
+  assert.equal(plan14.length, 14);
+  const tomorrow = plan14[1].date;
+  const myBrief = {
+    star: { title: 'Rocket Run', emoji: '🚀', text: 'Your rocket is about to launch to a strange planet full of dinosaurs. Count down from ten in your loudest voice, then float around like there is no gravity at all!' },
+    little: { title: 'Rocket Run', emoji: '🚀', text: 'Count down and blast off in your rocket!' },
+  };
+  assert.equal((await A.put(`/api/parent/admin/briefs/${today}`, myBrief)).status, 400, 'today is already out');
+  assert.equal((await B.put(`/api/parent/admin/briefs/${tomorrow}`, myBrief)).status, 403);
+  assert.equal((await A.put(`/api/parent/admin/briefs/${tomorrow}`, myBrief)).status, 200);
+  const after = (await A.get('/api/parent/admin/briefs')).data.days[1];
+  assert.equal(after.star.title, 'Rocket Run');
+  assert.equal(after.star.source, 'admin');
+  assert.equal((await A.del(`/api/parent/admin/briefs/${tomorrow}`)).status, 200);
+  assert.equal((await A.get('/api/parent/admin/briefs')).data.days[1].star.source, 'bank', 'back to automatic');
+  await A.put(`/api/parent/admin/briefs/${tomorrow}`, myBrief);
 
-  // Kid A: today → read → word → help
+  // Grown-up A chooses words for their child for a week; date windows are checked
+  assert.equal((await A.post('/api/parent/keywords', { kidIds: [kidA.id], words: 'rocket', starts: '2020-01-01', ends: '2020-01-02' })).status, 400, 'no past windows');
+  assert.equal((await A.post('/api/parent/keywords', { kidIds: [kidA.id], words: 'rocket', starts: tomorrow, ends: today })).status, 400, 'end before start');
+  assert.equal((await A.post('/api/parent/keywords', { kidIds: [kidB.id], words: 'rocket', ends: tomorrow })).status, 400, 'not your child');
+  assert.equal((await A.post('/api/parent/keywords', { kidIds: [kidA.id], words: 'Rocket, planet, dinosaur!', ends: plan14[6].date })).status, 200);
+  kws = (await A.get('/api/parent/keywords')).data;
+  assert.deepEqual(kws.kids[0].today, ['rocket', 'planet', 'dinosaur']);
+  assert.equal(kws.kids[0].source, 'parent');
+  assert.equal((await B.del(`/api/parent/keywords/${kws.sets[0].id}`)).status, 404, 'only your own lists');
+  // The admin sets words for every older child; a grown-up's own words still win for their child
+  assert.equal((await B.post('/api/parent/admin/keywords', { words: 'roar', ends: tomorrow })).status, 403);
+  assert.equal((await A.post('/api/parent/admin/keywords', { cohort: 'star', words: 'dragon, castle, knight', ends: tomorrow })).status, 200);
+  assert.deepEqual((await B.get('/api/parent/keywords')).data.kids[0].today, ['dragon', 'castle', 'knight']);
+  assert.equal((await B.get('/api/parent/keywords')).data.kids[0].source, 'admin');
+
+  // Kid A: today → read → word. Everyone gets the same brief; only the secret words differ.
   const day = (await A.get('/api/kid/today')).data;
-  assert.equal(day.briefs.star.title, 'Rocket Run');
   assert.equal(day.crew.name, 'Best Buds');
-  const read = (await A.post('/api/kid/read', { briefTitle: 'Rocket Run', stats: { wordsRead: 30, totalWords: 34, helpedWords: ['launch'], keywords: ['rocket', 'planet', 'dinosaur'], keywordsRead: ['rocket', 'planet', 'dinosaur'], keywordsForced: [] } })).data;
+  assert.deepEqual(day.briefs.star.keywords, ['rocket', 'planet', 'dinosaur']);
+  assert.match(day.briefs.star.text, /Your secret words today are rocket, planet and dinosaur\./);
+  await B.post('/api/kid/login', { kidId: kidB.id, pin: '5555' });
+  const dayB = (await B.get('/api/kid/today')).data;
+  assert.equal(dayB.briefs.star.title, day.briefs.star.title, 'same brief for everyone');
+  assert.equal(dayB.briefs.star.briefText, day.briefs.star.briefText);
+  assert.deepEqual(dayB.briefs.star.keywords, ['dragon', 'castle', 'knight']);
+  const read = (await A.post('/api/kid/read', { briefTitle: day.briefs.star.title, stats: { wordsRead: 30, totalWords: 34, helpedWords: ['launch'], keywords: ['rocket', 'planet', 'dinosaur'], keywordsRead: ['rocket', 'planet', 'dinosaur'], keywordsForced: [] } })).data;
   assert.equal(read.gained.dobs, 0, 'reading the script only unlocks the next step');
   assert.equal((await A.post('/api/kid/read', { stats: {} })).data.already, true, 'once a day');
   await A.post('/api/kid/word', { result: { type: 'spell' } });

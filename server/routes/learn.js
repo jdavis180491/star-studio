@@ -5,6 +5,7 @@ import { q, one, many } from '../db.js';
 import { requireKid } from '../auth.js';
 import { earnDobs, dobLeaderboard, DOB_VALUES } from '../lib/rewards.js';
 import { later, notifyFamily } from '../lib/notify.js';
+import { practiceWords, wordsForKid } from '../lib/keywords.js';
 import { familySettings, crewForKid } from '../lib/family.js';
 import { wordsFor, pickWords } from '../data/wordBank.js';
 import { pickTopic } from '../data/topics.js';
@@ -21,17 +22,6 @@ const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 async function familyOf(kid) {
   const f = await one(`SELECT settings FROM families WHERE id = $1`, [kid.family_id]);
   return familySettings(f?.settings);
-}
-
-/** Words to practise: some from the grown-up's weekly list, the rest from the phonics word bank. */
-async function practiceWords(kid, n, fromList = 1) {
-  const s = await familyOf(kid);
-  const track = kid.track === 'little' ? 'little' : 'star';
-  const bank = wordsFor(kid.year_group, { little: track === 'little' });
-  const weekly = s[track]?.weeklyWords || [];
-  const chosen = pickWords(weekly, Math.min(fromList, weekly.length));
-  for (const w of pickWords(bank, n * 2)) if (chosen.length < n && !chosen.includes(w)) chosen.push(w);
-  return chosen.slice(0, n);
 }
 
 const voiceId = async (kid) => (await familyOf(kid)).directorVoiceId;
@@ -67,7 +57,7 @@ export function learnRouter() {
     try {
       const kid = req.kid;
       const ideas = req.body?.ideas && typeof req.body.ideas === 'object' ? req.body.ideas : {};
-      const keywords = await practiceWords(kid, isYoung(kid) ? 1 : 3, isYoung(kid) ? 1 : 2);
+      const keywords = (await wordsForKid(kid)).words;
       let story = null;
       if (claudeEnabled()) {
         try {
@@ -143,7 +133,7 @@ export function learnRouter() {
   r.get('/kid/writing/topic', async (req, res, next) => {
     try {
       const to = String(req.query.to || 'your friend').slice(0, 30);
-      res.json({ topic: pickTopic(to, String(req.query.not || '')), tryWords: await practiceWords(req.kid, 2, 2) });
+      res.json({ topic: pickTopic(to, String(req.query.not || '')), tryWords: (await wordsForKid(req.kid)).words.slice(0, 2) });
     } catch (e) {
       next(e);
     }
@@ -272,7 +262,7 @@ export function learnRouter() {
   r.post('/kid/spelling/start', async (req, res, next) => {
     try {
       const kid = req.kid;
-      const words = await practiceWords(kid, 5, 2);
+      const words = await practiceWords(kid, 5);
       const cached = await many(`SELECT word, sentence FROM spell_sentences WHERE word = ANY($1)`, [words]);
       const sentences = Object.fromEntries(cached.map((c) => [c.word, c.sentence]));
       const missing = words.filter((w) => !sentences[w]);

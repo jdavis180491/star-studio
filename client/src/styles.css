@@ -4134,3 +4134,46 @@ a.btn {
 .notify-steps li {
   margin: 4px 0;
 }
+
+/* Keywords & admin briefs */
+.date-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.date-row > * {
+  flex: 1 1 140px;
+}
+.date-row .emoji-in {
+  flex: 0 0 64px;
+  text-align: center;
+}
+.brief-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.brief-head h2 {
+  margin: 0;
+}
+.tag {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+.tag.on {
+  background: var(--lime);
+  color: #111;
+}
+.brief-edit textarea {
+  width: 100%;
+  margin-top: 8px;
+}
+.word-chips .wchip {
+  margin: 2px 4px 2px 0;
+}

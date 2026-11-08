@@ -26,12 +26,21 @@ Also: a Dibbly Dobs leaderboard (family and crew, resets Monday), trophies at 50
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys | For Story Buddy, stories, spell check, spelling sentences, Star Studio briefs, the Director and the edits |
 | `ELEVENLABS_API_KEY` | elevenlabs.io → API Keys (needs a paid plan from Replit's servers) | For the Director, Story Buddy and spelling voice |
 | `OPENAI_API_KEY` | platform.openai.com → API Keys | Optional: rewards unlock words said on camera, and times captions to speech |
+| `ADMIN_EMAILS` | The email(s) of the app's admin(s), separated by commas | Shows the **Daily briefs** tab to those accounts only |
 
 `PARENT_PASSCODE` is no longer used (each parent has their own account now). You can delete it.
 
 ### App Storage (for videos)
 In Replit, open **Object Storage / App Storage** and create a bucket. Videos are then stored privately and survive restarts.
 Without it, videos are kept on the server's temporary disk and can disappear.
+
+### Daily briefs and keywords
+- **One brief a day, the same for everyone**: an older version (7 and above) and a young version (5 and below) of the same idea.
+  They rotate through 150 built-in briefs (about five months before any repeat). The admin can replace any day from tomorrow
+  onwards (written with AI or by hand). Once a day starts, its brief can't change.
+- **Keywords** ("secret words" at the end of the brief, the word moment, stories and spelling) are picked automatically each day
+  for the child's year group. The admin can set words for everyone, and a grown-up can set words for their own child; both choose a
+  date window. A grown-up's words beat the admin's, which beat the automatic ones.
 
 ### Phone notifications
 Nothing to set up on Replit. On each grown-up's phone: open the grown-ups' page in Safari, tap Share → **Add to Home Screen**,

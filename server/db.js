@@ -263,6 +263,21 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS push_subs_family ON push_subs (family_id);
   `,
+  // 6: one brief for everyone; keyword lists with a date window (admin = everyone, parent = their child). Safe to re-run.
+  `
+  CREATE TABLE IF NOT EXISTS keyword_sets (
+    id SERIAL PRIMARY KEY,
+    kid_id INT REFERENCES kids(id) ON DELETE CASCADE,
+    family_id INT REFERENCES families(id) ON DELETE CASCADE,
+    cohort TEXT NOT NULL DEFAULT 'all',
+    words JSONB NOT NULL,
+    starts DATE NOT NULL,
+    ends DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS keyword_sets_kid ON keyword_sets (kid_id, ends);
+  DELETE FROM briefs WHERE scope <> 'all';
+  `,
 ];
 
 export async function migrate() {
