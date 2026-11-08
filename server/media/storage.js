@@ -59,6 +59,7 @@ async function replitDriver() {
 }
 
 let driver = null;
+let problem = null;
 export async function initStorage() {
   if (process.env.REPL_ID || process.env.OBJECT_STORAGE_BUCKET_ID) {
     try {
@@ -66,15 +67,18 @@ export async function initStorage() {
       console.log('📦 Videos: Replit Object Storage');
       return driver;
     } catch (e) {
+      problem = e.message;
       console.warn(`📦 Replit Object Storage not available (${e.message}). Using local disk; videos may be lost on redeploy.`);
     }
   }
+  if (!problem) problem = 'No storage bucket set. Add the OBJECT_STORAGE_BUCKET_ID secret.';
   driver = localDriver();
   console.log('📦 Videos: local disk (.data/media)');
   return driver;
 }
 
 export const storageKind = () => driver?.kind || 'none';
+export const storageProblem = () => (driver?.kind === 'replit' ? null : problem);
 
 export async function putFile(key, file) {
   await driver.put(key, file);

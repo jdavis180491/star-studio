@@ -14,7 +14,7 @@ import { voiceEnabled, listVoices, registerLine, lineAudio, DEFAULT_VOICE } from
 import { transcribeEnabled } from '../ai/transcribe.js';
 import { rateLimit } from '../lib/rateLimit.js';
 import { videoForClient } from '../lib/videos.js';
-import { storageKind } from '../media/storage.js';
+import { storageKind, storageProblem } from '../media/storage.js';
 import { deleteVideoFiles } from './kid.js';
 import { AVATAR_DEFAULT, FREE_ITEMS } from '../lib/catalog.js';
 import { grant } from '../lib/rewards.js';
@@ -53,6 +53,7 @@ export function parentRouter() {
         voice: voiceEnabled(),
         transcribe: transcribeEnabled(),
         storage: storageKind(),
+        storageProblem: storageProblem(),
         today: dayISO(),
         tomorrow: addDays(dayISO(), 1),
         yearGroups: YEAR_GROUPS.map((id) => ({ id, label: YEAR_LABELS[id] })),
