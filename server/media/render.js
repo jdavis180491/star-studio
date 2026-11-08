@@ -7,7 +7,6 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import ffmpegStatic from 'ffmpeg-static';
 import { one, q, many } from '../db.js';
 import { localCopy, putFile, removeFile, tmpPath } from './storage.js';
 import { introCard, outroCard, captionOverlay, lyricCard, reelCard } from './graphics.js';
@@ -16,7 +15,17 @@ import { transcribe } from '../ai/transcribe.js';
 import { spokenWords, isKeywordForm, normalizeWord } from '../../client/src/reading/words.js';
 import { MUSIC, EDIT_EFFECTS } from '../../client/src/shared/creative.js';
 
-const FFMPEG = process.env.FFMPEG_PATH || ffmpegStatic || 'ffmpeg';
+// Which ffmpeg to use: FFMPEG_PATH if set, else the ffmpeg-static download (an optional
+// install: if GitHub is down when npm installs, it is skipped), else the system ffmpeg.
+async function findFfmpeg() {
+  if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
+  try {
+    const p = (await import('ffmpeg-static')).default;
+    if (p && fs.existsSync(p)) return p;
+  } catch {}
+  return 'ffmpeg';
+}
+const FFMPEG = await findFfmpeg();
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MUSIC_DIRS = [path.join(here, '..', '..', 'client', 'public', 'music'), path.join(here, '..', '..', 'dist', 'music')];
 const INTRO = 2.5;
