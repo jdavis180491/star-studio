@@ -6,7 +6,7 @@ import {
 import { publicKid } from '../lib/family.js';
 import { rateLimit } from '../lib/rateLimit.js';
 
-const CONSENT_VERSION = 1;
+const CONSENT_VERSION = 2;
 
 export function authRouter() {
   const r = express.Router();
@@ -18,7 +18,7 @@ export function authRouter() {
       const em = String(email || '').trim().toLowerCase();
       if (!validEmail(em)) return res.status(400).json({ error: 'Please enter a valid email address' });
       if (typeof password !== 'string' || password.length < 8) return res.status(400).json({ error: 'Password needs at least 8 characters' });
-      if (consent !== true) return res.status(400).json({ error: 'Please tick the consent box to continue' });
+      if (consent !== true) return res.status(400).json({ error: 'Please accept the Terms & Privacy to continue' });
       if (await one(`SELECT 1 FROM families WHERE email = $1`, [em])) return res.status(409).json({ error: 'That email already has an account. Try logging in.' });
       const fam = await one(
         `INSERT INTO families (email, password_hash, consent_at, settings) VALUES ($1, $2, now(), $3) RETURNING id`,
