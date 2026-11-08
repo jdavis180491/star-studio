@@ -140,6 +140,18 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     openHelp(i); // eslint-disable-line no-use-before-define
   }, [snap.needsHelp]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep the word they're on (or the sentence they're repeating) in view, above the controls.
+  const followIndex = echo && echoPhase !== 'start' && echoPhase !== 'done' ? sentences[echoAt]?.[0] : snap.stuck ?? snap.nextIndex;
+  useEffect(() => {
+    if (followIndex == null || followIndex < 0) return;
+    const el = document.querySelector(`.brief-text .word[data-i="${followIndex}"]`);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const dock = document.querySelector('.screen.read .dock')?.getBoundingClientRect();
+    const bottomLimit = (dock ? dock.top : innerHeight) - 24;
+    if (r.bottom > bottomLimit || r.top < 80) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [followIndex]);
+
   // Read past a word? Tell them to go back for the red one.
   const lastStuck = useRef(null);
   useEffect(() => {
@@ -384,7 +396,7 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
               ].join(' ');
               return (
                 <React.Fragment key={i}>
-                  <button className={cls} onClick={() => openHelp(i)}>
+                  <button className={cls} data-i={i} onClick={() => openHelp(i)}>
                     {t.display}
                   </button>{' '}
                 </React.Fragment>

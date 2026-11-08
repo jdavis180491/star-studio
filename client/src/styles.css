@@ -1482,7 +1482,7 @@ svg {
   place-items: center;
   font-family: var(--display);
   font-weight: 900;
-  font-size: 200px;
+  font-size: min(200px, 28vh, 28vw);
   color: #fff;
   text-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
   animation: hit 0.5s;
@@ -4338,4 +4338,46 @@ a.btn {
   background: linear-gradient(135deg, #2bd96b, #c8ff3d);
   color: #111;
   box-shadow: 0 8px 30px rgba(120, 255, 90, 0.45);
+}
+
+/* ---------- always-visible controls (found in the full test) ---------- */
+/* Reading: the dock (mic, keywords, Film) stays on screen even when the passage is long. */
+.screen.read .dock {
+  position: sticky;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 30;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.55);
+}
+/* Camera, landscape: the record button floats bottom-right so the picture can stay big. */
+@media (orientation: landscape) {
+  .studio-cam .film-dock {
+    position: fixed;
+    right: max(22px, env(safe-area-inset-right));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    min-height: 0;
+    z-index: 40;
+  }
+  .studio-cam .tray {
+    padding-right: 130px;
+  }
+  .studio-cam .viewfinder {
+    max-height: calc(100dvh - 300px);
+    height: min(calc(100dvh - 300px), calc((100vw - 24px) * 9 / 16));
+  }
+  .studio-cam .viewfinder.rec,
+  .studio-cam .viewfinder.counting {
+    max-height: calc(100dvh - 110px);
+    height: min(calc(100dvh - 110px), calc((100vw - 170px) * 9 / 16));
+  }
+  /* Playback: buttons sit under the video as normal. */
+  .studio-cam .film-dock:has(.row-btns) {
+    position: static;
+  }
+}
+/* Room for the last line to scroll clear of the pinned reading controls. */
+.screen.read .prompter-wrap {
+  padding-bottom: 40px;
+}
+.screen.read {
+  scroll-padding-bottom: 160px;
 }

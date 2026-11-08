@@ -185,3 +185,15 @@ test('words further on never count as tries at the skipped word', () => {
   assert.equal(s.status[0], 'unread');
   assert.equal(s.stuck, 0);
 });
+
+test('after word help, two clear tries count even if the engine hears a different word', () => {
+  const t = new ReadingTracker('I like though cake.', []);
+  t.ingest(1, 'I like');
+  t.helpedWith(2);
+  t.ingest(2, 'so');
+  assert.equal(t.snapshot().nextIndex, 2, 'one try is not enough');
+  t.ingest(3, 'go');
+  assert.equal(t.snapshot().status[2], 'read');
+  t.ingest(4, 'cake');
+  assert.ok(t.snapshot().unlocked);
+});
