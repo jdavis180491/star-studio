@@ -50,7 +50,6 @@ export function parentRouter() {
       res.json({
         email: f.email,
         listening: sttEnabled() ? 'elevenlabs' : 'device',
-        consentNeeded: (f.settings?.consentVersion || 1) < STT_CONSENT_VERSION,
         claude: claudeEnabled(),
         model: MODEL,
         voice: voiceEnabled(),

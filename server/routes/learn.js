@@ -7,7 +7,7 @@ import { earnDobs, dobLeaderboard, DOB_VALUES } from '../lib/rewards.js';
 import { later, notifyFamily } from '../lib/notify.js';
 import { practiceWords, wordsForKid } from '../lib/keywords.js';
 import { levelFor } from '../lib/levels.js';
-import { sttEnabled, sttToken, STT_CONSENT_VERSION } from '../ai/stt.js';
+import { sttEnabled, sttToken } from '../ai/stt.js';
 import { familySettings, crewForKid } from '../lib/family.js';
 import { wordsFor, pickWords } from '../data/wordBank.js';
 import { pickTopic } from '../data/topics.js';
@@ -44,13 +44,11 @@ export function learnRouter() {
   r.use('/kid', requireKid);
 
   // ================================================================ HEARING THE CHILD
-  // A single-use pass for ElevenLabs live speech-to-text. 204 = use the iPad's own recognition
-  // (no key, or the child's grown-up hasn't accepted the updated Terms yet).
+  // A single-use pass for ElevenLabs live speech-to-text (automatic; nobody sees it).
+  // 204 = use the iPad's own recognition (no ElevenLabs key).
   r.post('/kid/listen-token', rateLimit({ perMinute: 40 }), async (req, res, next) => {
     try {
       if (!sttEnabled()) return res.status(204).end();
-      const f = await one(`SELECT settings FROM families WHERE id = $1`, [req.kid.family_id]);
-      if ((f?.settings?.consentVersion || 1) < STT_CONSENT_VERSION) return res.status(204).end();
       res.json(await sttToken());
     } catch (e) {
       console.warn('👂 Speech-to-text token failed:', e.message, e.detail || '');
