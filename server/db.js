@@ -179,13 +179,26 @@ const MIGRATIONS = [
   `,
   // 3: Dibbly Dobs: coins become Dobs, learning sections, letters
   `
-  ALTER TABLE kids RENAME COLUMN coins TO dobs;
+  -- Safe to re-run: Replit's publish can copy the dev schema to production
+  -- without the schema_migrations rows, so the rename may already be done.
+  DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'kids' AND column_name = 'coins')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'kids' AND column_name = 'dobs') THEN
+      ALTER TABLE kids RENAME COLUMN coins TO dobs;
+      UPDATE kids SET dobs = 0;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'events' AND column_name = 'coins')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'events' AND column_name = 'dobs') THEN
+      ALTER TABLE events RENAME COLUMN coins TO dobs;
+    END IF;
+  END $$;
+  ALTER TABLE kids ADD COLUMN IF NOT EXISTS dobs INT NOT NULL DEFAULT 0;
   ALTER TABLE kids ALTER COLUMN dobs SET DEFAULT 0;
   ALTER TABLE kids ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}';
-  ALTER TABLE events RENAME COLUMN coins TO dobs;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS dobs INT NOT NULL DEFAULT 0;
   ALTER TABLE events ADD COLUMN IF NOT EXISTS note TEXT;
   ALTER TABLE events ADD COLUMN IF NOT EXISTS by_parent BOOLEAN NOT NULL DEFAULT false;
-  UPDATE kids SET dobs = 0;
 
   CREATE TABLE IF NOT EXISTS stories (
     id SERIAL PRIMARY KEY,
