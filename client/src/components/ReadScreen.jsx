@@ -48,6 +48,8 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
   const [reactions, setReactions] = useState([]);
   const [secs, setSecs] = useState(0);
   const recRef = useRef(null);
+  const heardTick = useRef(0); // counts transcripts, so "I say it, you say it" only reacts to new speech
+  const echoBase = useRef(0);
   const resumeRef = useRef(false);
   const called = useRef(new Set());
   const callTimer = useRef(null);
@@ -109,6 +111,7 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     recRef.current = rec;
     const offs = [
       rec.on('transcript', ({ text, sessionId, alternatives = [] }) => {
+        heardTick.current += 1;
         let lit = tracker.ingest(sessionId, text);
         // Misheard? Try the speech engine's other guesses for the same words.
         for (const alt of alternatives) {
@@ -248,40 +251,61 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
   };
 
   // ---- "I say it, you say it"
-  const echoSay = async (i) => {
+  // Words of the current sentence heard so far (across tries); missed ones go red.
+  const echoGot = useRef(new Set());
+  const [echoMissing, setEchoMissing] = useState([]);
+  const echoSay = async (i, text = null) => {
     unlockAudio();
     primeDirectorAudio();
     recRef.current?.stop();
+    if (i !== echoAt || text === null) {
+      if (i !== echoAt) echoGot.current = new Set();
+      setEchoMissing([]);
+    }
     setEchoAt(i);
     setEchoPhase('saying');
-    const text = sentences[i].map((x) => tracker.tokens[x].display).join(' ');
-    await say(text);
+    await say(text || sentences[i].map((x) => tracker.tokens[x].display).join(' '));
+    echoBase.current = heardTick.current;
     setEchoPhase('yours');
     recRef.current?.start();
   };
-  // When they've said most of the sentence back, move on to the next one.
+  // Every word must be said back (only "a", "an" and "the" can slip through).
   useEffect(() => {
-    if (echoPhase !== 'yours') return;
+    if (echoPhase !== 'yours' || heardTick.current === echoBase.current) return undefined; // nothing said yet
     const idx = sentences[echoAt];
     const heard = spokenWords(snap.heard || '');
-    const want = idx.map((i) => tracker.tokens[i].norm);
-    const got = want.filter((w) => heard.some((h) => wordsMatch(w, h, { loose: w.length >= 4 }))).length;
-    const allLit = idx.every((i) => snap.status[i] !== 'unread');
-    if (!allLit && got / want.length < 0.6) return undefined;
-    // Let them finish the sentence: move on after a short pause with nothing new heard.
-    const t = setTimeout(() => {
-      tracker.completeSentence(idx);
-      setSnap(tracker.snapshot());
-      celebrateWords(idx);
-      if (echoAt + 1 < sentences.length) {
-        setEchoPhase('saying');
-        setTimeout(() => echoSay(echoAt + 1), 700);
-      } else {
-        setEchoPhase('done');
-      }
-    }, allLit ? 600 : 1400);
+    for (const i of idx) {
+      const w = tracker.tokens[i].norm;
+      if (['a', 'an', 'the'].includes(w) || heard.some((h) => wordsMatch(w, h, { loose: w.length >= 4 }))) echoGot.current.add(i);
+    }
+    const missing = idx.filter((i) => !echoGot.current.has(i));
+    if (missing.length && missing.length < echoMissing.length) setEchoMissing(missing);
+    // Wait for a pause, so they can finish speaking.
+    const t = setTimeout(
+      () => {
+        if (missing.length) {
+          // Missed some: show them in red and say just those words for them to repeat.
+          setEchoMissing(missing);
+          wrong();
+          echoSay(echoAt, `Nearly! Say: ${missing.map((i) => tracker.tokens[i].display.replace(/[^A-Za-z'’-]/g, '')).join(', ')}.`);
+          return;
+        }
+        echoGot.current = new Set();
+        setEchoMissing([]);
+        tracker.completeSentence(idx);
+        setSnap(tracker.snapshot());
+        celebrateWords(idx);
+        if (echoAt + 1 < sentences.length) {
+          setEchoPhase('saying');
+          setTimeout(() => echoSay(echoAt + 1), 700);
+        } else {
+          setEchoPhase('done');
+        }
+      },
+      missing.length ? 2600 : 700
+    );
     return () => clearTimeout(t);
-  }, [snap.heard, snap.status, echoPhase]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snap.heard, echoPhase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pct = Math.round(snap.progress * 100);
   const listening = mic === 'listening';
@@ -350,7 +374,7 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
                 s === 'filled' ? 'filled' : '',
                 paidWords.has(t.norm) ? 'helped' : '',
                 listening && i === snap.nextIndex ? 'next' : '',
-                i === snap.stuck ? 'stuck' : '',
+                i === snap.stuck || echoMissing.includes(i) ? 'stuck' : '',
                 echo && echoPhase !== 'start' && echoPhase !== 'done' ? (sentences[echoAt]?.includes(i) ? 'echo-now' : 'echo-dim') : '',
               ].join(' ');
               return (
