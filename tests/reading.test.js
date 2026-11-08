@@ -145,3 +145,27 @@ test('does not unlock before the last sentence is read', () => {
   t.ingest(2, 'then shout your big monster move');
   assert.ok(t.snapshot().unlocked);
 });
+
+test('two close tries at a misheard word count it; three tries ask for word help', () => {
+  const t = new ReadingTracker('The enormous dragon sneezed.', []);
+  t.ingest(1, 'the enemies');
+  assert.equal(t.snapshot().nextIndex, 1, 'one close try is not enough yet');
+  t.ingest(2, 'enemas');
+  assert.equal(t.snapshot().status[1], 'read', 'second close try counts');
+  t.ingest(3, 'banana');
+  t.ingest(4, 'pizza');
+  assert.equal(t.snapshot().needsHelp, null, 'two tries so far');
+  t.ingest(5, 'table');
+  assert.equal(t.snapshot().needsHelp, 2, 'three tries: help pops up for "dragon"');
+  assert.equal(t.helpedWith(2), true);
+  t.ingest(6, 'sneezed');
+  assert.ok(t.snapshot().unlocked);
+});
+
+test('words further on never count as tries at the skipped word', () => {
+  const t = new ReadingTracker('Tiptoe past the sleeping giant quietly.', []);
+  t.ingest(1, 'past the sleeping giant');
+  const s = t.snapshot();
+  assert.equal(s.status[0], 'unread');
+  assert.equal(s.stuck, 0);
+});

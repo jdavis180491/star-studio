@@ -7,8 +7,8 @@ import { createRecognizer, speechSupported } from '../speech/recognizer.js';
 import { say, primeDirectorAudio } from '../speech/say.js';
 import { unlockAudio, keywordHit, wrong } from '../sfx.js';
 
-// Same as the server: at least 15 words to send a story and earn its Dob.
-const MIN_WORDS = 15;
+// Same as the server: at least 15 words to send a story and earn its Dob (5 for Year 2 and below).
+const minWords = (kid) => (['R', 'Y1', 'Y2'].includes(kid?.settings?.levels?.writing || kid?.yearGroup) ? 5 : 15);
 
 // Writing: write a story to a brother/sister, a crew friend or a grown-up; spell check
 // highlights mistakes; friends can continue the story.
@@ -27,6 +27,7 @@ export default function Writing({ kid, onBack, onKid }) {
   if (view === 'compose') {
     return (
       <Compose
+        kid={kid}
         thread={thread}
         onBack={() => setView(thread ? 'thread' : 'home')}
         onSent={(r) => {
@@ -146,7 +147,8 @@ function Thread({ threadId, onBack, onContinue }) {
 const tokenize = (text) => text.split(/(\s+)/);
 const clean = (w) => w.toLowerCase().replace(/[^a-z'’-]/g, '');
 
-function Compose({ thread, onBack, onSent }) {
+function Compose({ kid, thread, onBack, onSent }) {
+  const MIN_WORDS = minWords(kid);
   const [recipients, setRecipients] = useState(null);
   const [to, setTo] = useState(thread ? { continuing: true } : null);
   const [topic, setTopic] = useState(thread ? 'Continue the story!' : '');

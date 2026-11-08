@@ -17,8 +17,9 @@ import { registerLine } from '../ai/voice.js';
 import { chunkWord } from '../../client/src/reading/phonics.js';
 
 const newId = () => crypto.randomBytes(9).toString('base64url').replace(/[^a-zA-Z0-9]/g, 'x');
-// A story or letter must have at least this many words to send (and earn its Dob).
-export const MIN_WRITING_WORDS = 15;
+// A story or letter must have at least this many words to send (and earn its Dob):
+// 5 for Year 2 and below (by their writing level), 15 for everyone else.
+export const minWritingWords = (kid) => (['R', 'Y1', 'Y2'].includes(levelFor(kid, 'writing')) ? 5 : 15);
 const isYoung = (kid) => kid.track === 'little' || kid.year_group === 'R';
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -68,7 +69,7 @@ export function learnRouter() {
       let out = null;
       if (claudeEnabled()) {
         try {
-          out = await storyTurn({ history, ideas, young: isYoung(req.kid) });
+          out = await storyTurn({ history, ideas, young: isYoung(req.kid), ask: buddyQuestion(history) });
         } catch (e) {
           console.warn('Story Buddy fell back:', e.message);
         }
@@ -200,7 +201,8 @@ export function learnRouter() {
       const kid = req.kid;
       const body = String(req.body?.body || '').trim().slice(0, 4000);
       const realWords = body.split(/\s+/).filter((w) => /[a-z]/i.test(w)).length;
-      if (realWords < MIN_WRITING_WORDS) return res.status(400).json({ error: `Write at least ${MIN_WRITING_WORDS} words first! (${realWords} so far)` });
+      const min = minWritingWords(kid);
+      if (realWords < min) return res.status(400).json({ error: `Write at least ${min} words first! (${realWords} so far)` });
       const topic = String(req.body?.topic || '').slice(0, 200);
       let threadId = req.body?.threadId ? Number(req.body.threadId) : null;
       let toKid = null;
@@ -400,15 +402,43 @@ function storyForClient(s) {
   return { id: s.id, title: s.title, text: s.body, keywords: s.keywords, chunks: s.chunks, picture: s.picture, reads: s.reads, createdAt: s.created_at };
 }
 
+// ---------------------------------------------------------------- Story Buddy's two questions
+// A different mix every time, so it isn't always "who's the hero?".
+const FIRST_QUESTIONS = [
+  ['what kind of story they want today: funny, spooky, magical, or a big adventure', 'What kind of story today: funny, spooky, magical or a big adventure?'],
+  ['who the story is about (a person, an animal, a monster, anything)', 'Who should our story be about?'],
+  ['where the story happens: space, a jungle, under the sea, a castle, or their own idea', 'Where shall our story happen? Space, a jungle, under the sea, or somewhere else?'],
+  ['which animal would be the star of the story, and what is special about it', 'If an animal was the star of our story, which one would it be?'],
+  ['what the silliest thing in the story should be', 'What’s the silliest thing we could put in a story?'],
+  ['who the main character is: a pirate, a robot, a dragon, a superhero or their own idea', 'Pick a hero: a pirate, a robot, a dragon, a superhero, or your own idea!'],
+  ['what magical object the story should have', 'Our story needs something magic. What could it be?'],
+];
+const SECOND_QUESTIONS = [
+  ['what goes wrong', 'Uh oh, what goes wrong?'],
+  ['what surprising thing happens next', 'Then something surprising happens. What is it?'],
+  ['who or what they meet on the way', 'Who do they bump into on the way?'],
+  ['what secret power or trick saves the day', 'What secret power or trick saves the day?'],
+  ['what they find, and what is inside it', 'They find something mysterious. What is it?'],
+  ['what the funny ending should be', 'How should it end? Make it funny!'],
+  ['what the big problem is that they have to fix', 'What big problem do they have to fix?'],
+];
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+function buddyQuestion(history) {
+  const replies = history.filter((h) => h.who === 'kid').length;
+  if (replies >= 2) return null;
+  return pick(replies === 0 ? FIRST_QUESTIONS : SECOND_QUESTIONS)[0];
+}
+const HELLOS = ['Hello, storyteller!', 'Hi there, superstar!', 'Ooh, hello! Story time!', 'Hey you! Let’s make something brilliant.', 'Welcome back, story maker!'];
+
 // ---------------------------------------------------------------- offline fallbacks (no API key)
 function offlineBuddy(history, ideas) {
   const last = [...history].reverse().find((h) => h.who === 'kid')?.text?.trim() || '';
   const p = { ...ideas };
   const replies = history.filter((h) => h.who === 'kid').length;
-  if (replies === 0) return { say: 'Hello, storyteller! Who is your story about, and where are they?', plan: p, done: false };
+  if (replies === 0) return { say: `${pick(HELLOS)} ${pick(FIRST_QUESTIONS)[1]}`, plan: p, done: false };
   if (replies === 1) {
     p.hero = last || 'a brave little robot';
-    return { say: `Ooh, ${p.hero}! So what exciting thing happens?`, plan: p, done: false };
+    return { say: `Ooh, ${p.hero}! ${pick(SECOND_QUESTIONS)[1]}`, plan: p, done: false };
   }
   p.problem = last || 'everything turns to jelly';
   return { say: 'Brilliant! I’m writing your story now!', plan: p, done: true };

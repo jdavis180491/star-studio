@@ -152,3 +152,12 @@ test('subject levels follow reading unless set', () => {
   assert.equal(levelFor(kid, 'spelling'), 'Y3', 'not set: same as reading');
   assert.deepEqual(cleanLevels({ writing: 'Y9', spelling: 'Y1', maths: '' }), { spelling: 'Y1' });
 });
+
+import { minWritingWords } from '../server/routes/learn.js';
+
+test('writing: 5 words for Year 2 and below (by writing level), 15 for older', () => {
+  assert.equal(minWritingWords({ year_group: 'Y2', settings: {} }), 5);
+  assert.equal(minWritingWords({ year_group: 'R', settings: {} }), 5);
+  assert.equal(minWritingWords({ year_group: 'Y3', settings: {} }), 15);
+  assert.equal(minWritingWords({ year_group: 'Y4', settings: { levels: { writing: 'Y1' } } }), 5, 'follows the writing level');
+});

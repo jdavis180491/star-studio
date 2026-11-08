@@ -84,7 +84,7 @@ export class BrowserRecognizer extends Emitter {
     rec.lang = this.lang;
     rec.continuous = true;
     rec.interimResults = true;
-    rec.maxAlternatives = 1;
+    rec.maxAlternatives = 4; // other guesses help when a child's word is misheard
     const id = ++this.sessionId;
 
     rec.onstart = () => {
@@ -93,8 +93,15 @@ export class BrowserRecognizer extends Emitter {
     rec.onresult = (e) => {
       const parts = [];
       for (let i = 0; i < e.results.length; i++) parts.push(e.results[i][0].transcript.trim());
-      const isFinal = e.results[e.results.length - 1]?.isFinal ?? false;
-      this.emit('transcript', { text: collapse(parts), isFinal, sessionId: id });
+      const last = e.results[e.results.length - 1];
+      const isFinal = last?.isFinal ?? false;
+      // The same speech with the engine's other guesses for the latest part.
+      const alternatives = [];
+      for (let j = 1; last && j < last.length; j++) {
+        const alt = last[j]?.transcript?.trim();
+        if (alt) alternatives.push(collapse([...parts.slice(0, -1), alt]));
+      }
+      this.emit('transcript', { text: collapse(parts), isFinal, sessionId: id, alternatives });
     };
     rec.onerror = (e) => {
       if (e.error === 'no-speech' || e.error === 'aborted') return;
@@ -117,14 +124,11 @@ export class BrowserRecognizer extends Emitter {
       const now = Date.now();
       this.restarts = this.restarts.filter((t) => now - t < 6000);
       this.restarts.push(now);
-      if (this.restarts.length > 4) {
-        this.want = false;
-        this.emit('state', 'paused');
-        return;
-      }
+      // Keep listening until told to stop; if Safari keeps ending quickly, just wait a moment longer.
+      const wait = this.restarts.length > 4 ? 1500 : 120;
       setTimeout(() => {
         if (this.want && !this.rec) this._spawn();
-      }, 120);
+      }, wait);
     };
 
     this.rec = rec;
