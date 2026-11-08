@@ -197,3 +197,29 @@ test('after word help, two clear tries count even if the engine hears a differen
   t.ingest(4, 'cake');
   assert.ok(t.snapshot().unlocked);
 });
+
+test('live streaming engines (one long transcript, re-sent each time) never cause false red words or help', () => {
+  const text = 'Your bed is a rocket and it launches in ten seconds. Do your safety checks, strap in, and count down out loud.';
+  const t = new ReadingTracker(text, []);
+  const words = text.split(/\s+/);
+  let committed = '';
+  let said = [];
+  for (let i = 0; i < words.length; i++) {
+    said.push(words[i]);
+    t.ingest('el', [committed, said.join(' ')].filter(Boolean).join(' '));
+    assert.equal(t.snapshot().stuck, null, `no red word after "${words[i]}"`);
+    assert.equal(t.snapshot().needsHelp, null);
+    if (i % 6 === 5) {
+      committed = [committed, said.join(' ')].join(' ').trim();
+      said = [];
+    }
+  }
+  assert.ok(t.snapshot().unlocked);
+});
+
+test('"the" never swallows a word that only sounds a bit like it ("tooth")', () => {
+  const t = new ReadingTracker('You are the tooth fairy.', []);
+  t.ingest(1, 'you are tooth fairy');
+  assert.ok(t.snapshot().unlocked);
+  assert.equal(t.snapshot().stuck, null);
+});

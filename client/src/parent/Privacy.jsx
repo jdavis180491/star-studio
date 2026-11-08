@@ -43,10 +43,13 @@ export function PrivacyDoc() {
           spell-check) and writes the replies, stories, daily challenges and video edits.
         </li>
         <li>
-          <b>ElevenLabs:</b> turns the app’s own words into a spoken voice. It receives only the app’s text, never your child’s voice.
+          <b>ElevenLabs (the voice):</b> turns the app’s own words into a spoken voice. For this it receives only the app’s text.
         </li>
         <li>
-          <b>Speech recognition:</b> when your child talks or reads aloud, the iPad’s built-in speech recognition (Apple) turns their voice into text.
+          <b>ElevenLabs (listening):</b> when your child reads aloud or talks to Story Buddy or the Director, their voice is streamed to
+          ElevenLabs’ speech-to-text service, which turns it into words so the app can follow along. The sound is sent only while the
+          microphone is on, is used only to make the text, and isn’t linked to your child’s name. If ElevenLabs isn’t available, the
+          iPad’s built-in speech recognition (Apple) is used instead.
         </li>
         <li>
           <b>OpenAI (optional):</b> if switched on, the sound from a finished Star Studio video is sent to turn speech into captions. It is off unless
