@@ -7,6 +7,7 @@
 import { one, many } from '../db.js';
 import { wordsFor, pickWords } from '../data/wordBank.js';
 import { dayISO, addDays } from './dates.js';
+import { levelFor } from './levels.js';
 
 export const WORDS_PER_DAY = { star: 3, little: 1 };
 export const COHORTS = ['all', 'star', 'little'];
@@ -72,11 +73,14 @@ export async function wordsForKid(kid, date = dayISO()) {
   return { words, list: words, source: 'auto', until: date };
 }
 
-/** Words to practise (spelling, writing): the chosen list first, then the year-group word bank. */
+/** Spelling words: a grown-up's or the admin's list first, then the word bank for their spelling level. */
 export async function practiceWords(kid, n) {
   const k = await wordsForKid(kid);
-  const chosen = pickWords(k.list, Math.min(n, k.list.length));
-  const bank = wordsFor(kid.year_group, { little: cohortOf(kid) === 'little' });
+  const level = levelFor(kid, 'spelling');
+  // Automatic keywords follow the reading level, so only use them if spelling is at the same level.
+  const base = k.source === 'auto' && level !== levelFor(kid, 'reading') ? [] : k.list;
+  const chosen = pickWords(base, Math.min(n, base.length));
+  const bank = wordsFor(level, { little: level === 'R' });
   for (const w of pickWords(bank, n * 3)) if (chosen.length < n && !chosen.includes(w)) chosen.push(w);
   return chosen.slice(0, n);
 }

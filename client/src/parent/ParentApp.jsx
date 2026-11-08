@@ -264,13 +264,19 @@ function Kids({ status }) {
             </h2>
             <div className="muted">
               {MODE_NAME[k.track]} · {status.yearGroups.find((y) => y.id === k.yearGroup)?.label} · {k.dobs} Dibbly Dobs
+              {Object.entries(k.levels || {}).map(([subject, yg]) => (
+                <span key={subject}>
+                  {' '}
+                  · {subject[0].toUpperCase() + subject.slice(1)}: {status.yearGroups.find((y) => y.id === yg)?.label}
+                </span>
+              ))}
             </div>
           </div>
           <button
             className="btn"
             onClick={() =>
               setEdit({
-                id: k.id, name: k.name, channelName: k.channelName, track: k.track, yearGroup: k.yearGroup, pin: '',
+                id: k.id, name: k.name, channelName: k.channelName, track: k.track, yearGroup: k.yearGroup, pin: '', levels: k.levels || {},
                 maths: { timesTables: k.settings?.maths?.timesTables || [2, 5, 10], bonds: k.settings?.maths?.bonds || [10] },
               })
             }
@@ -283,7 +289,7 @@ function Kids({ status }) {
         </div>
       ))}
       {!edit && (
-        <button className="btn primary" onClick={() => setEdit({ name: '', channelName: '', track: 'star', yearGroup: 'Y3', pin: '' })}>
+        <button className="btn primary" onClick={() => setEdit({ name: '', channelName: '', track: 'star', yearGroup: 'Y3', pin: '', levels: {} })}>
           + Add a child
         </button>
       )}
@@ -308,7 +314,7 @@ function Kids({ status }) {
               </select>
             </label>
             <label>
-              Year group
+              Reading level
               <select value={edit.yearGroup} onChange={(e) => setEdit({ ...edit, yearGroup: e.target.value })}>
                 {status.yearGroups.map((y) => (
                   <option key={y.id} value={y.id}>
@@ -317,6 +323,30 @@ function Kids({ status }) {
                 ))}
               </select>
             </label>
+            <div className="muted small">Writing, spelling and maths follow the reading level. Change any of them if your child is at a different level.</div>
+            {[
+              ['writing', 'Writing level'],
+              ['spelling', 'Spelling level'],
+              ['maths', 'Maths level'],
+            ].map(([subject, label]) => {
+              const reading = status.yearGroups.find((y) => y.id === edit.yearGroup)?.label;
+              return (
+                <label key={subject}>
+                  {label}
+                  <select
+                    value={edit.levels?.[subject] || ''}
+                    onChange={(e) => setEdit({ ...edit, levels: { ...(edit.levels || {}), [subject]: e.target.value || undefined } })}
+                  >
+                    <option value="">Same as reading ({reading})</option>
+                    {status.yearGroups.map((y) => (
+                      <option key={y.id} value={y.id}>
+                        {y.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              );
+            })}
             {edit.maths && (
               <>
                 <div className="field-label">Times tables to practise</div>

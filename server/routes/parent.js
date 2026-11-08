@@ -6,6 +6,7 @@ import { dayISO, addDays, isISODate } from '../lib/dates.js';
 import { upcomingBriefs, setAdminBriefs, clearBriefs, recentTitles } from '../lib/briefs.js';
 import { cleanWords, windowProblem, wordsForKid, setsFor, COHORTS, WORDS_PER_DAY } from '../lib/keywords.js';
 import { isAdminEmail } from '../lib/admin.js';
+import { cleanLevels } from '../lib/levels.js';
 import { familySettings, familyManagesScope, scopeMembers, randomCode } from '../lib/family.js';
 import { wordsFor, pickWords, YEAR_GROUPS, YEAR_LABELS } from '../data/wordBank.js';
 import { claudeEnabled, generateBrief, generateLittleFromMain, briefProblems, MODEL } from '../ai/claude.js';
@@ -30,6 +31,7 @@ const kidForParent = (k) => ({
   channelName: k.channel_name,
   track: k.track,
   yearGroup: k.year_group,
+  levels: k.settings?.levels || {},
   avatar: k.avatar,
   dobs: k.dobs,
   settings: k.settings,
@@ -77,7 +79,7 @@ export function parentRouter() {
 
   r.post('/kids', async (req, res, next) => {
     try {
-      const { name, channelName, pin, track = 'star', yearGroup } = req.body || {};
+      const { name, channelName, pin, track = 'star', yearGroup, levels } = req.body || {};
       if (!String(name || '').trim()) return res.status(400).json({ error: 'Add a name (only you will see it)' });
       if (!String(channelName || '').trim()) return res.status(400).json({ error: 'Add a channel name' });
       if (!validPin(String(pin || ''))) return res.status(400).json({ error: 'The PIN must be 4 digits' });
@@ -86,9 +88,9 @@ export function parentRouter() {
       if (count.n >= 6) return res.status(400).json({ error: 'Up to 6 profiles per family' });
       const yg = YEAR_GROUPS.includes(yearGroup) ? yearGroup : track === 'little' ? 'R' : 'Y3';
       const k = await one(
-        `INSERT INTO kids (family_id, name, channel_name, track, year_group, pin_hash, avatar, owned)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [fam(req), String(name).trim().slice(0, 40), String(channelName).trim().slice(0, 30), track, yg, await hashSecret(pin), AVATAR_DEFAULT, JSON.stringify(FREE_ITEMS)]
+        `INSERT INTO kids (family_id, name, channel_name, track, year_group, pin_hash, avatar, owned, settings)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [fam(req), String(name).trim().slice(0, 40), String(channelName).trim().slice(0, 30), track, yg, await hashSecret(pin), AVATAR_DEFAULT, JSON.stringify(FREE_ITEMS), { levels: cleanLevels(levels) }]
       );
       res.json({ kid: kidForParent(k) });
     } catch (e) {
@@ -107,6 +109,7 @@ export function parentRouter() {
       const yg = YEAR_GROUPS.includes(b.yearGroup) ? b.yearGroup : k.year_group;
       const settings = { ...k.settings };
       if (b.maths && typeof b.maths === 'object') settings.maths = mathsSettings({ maths: b.maths });
+      if (b.levels && typeof b.levels === 'object') settings.levels = cleanLevels(b.levels);
       let pinHash = k.pin_hash;
       if (b.pin) {
         if (!validPin(String(b.pin))) return res.status(400).json({ error: 'The PIN must be 4 digits' });

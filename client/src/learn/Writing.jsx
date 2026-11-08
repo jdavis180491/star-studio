@@ -4,8 +4,11 @@ import Avatar from '../components/Avatar.jsx';
 import { DobReward } from '../components/Dob.jsx';
 import { SectionHeader } from './common.jsx';
 import { createRecognizer, speechSupported } from '../speech/recognizer.js';
-import { speak } from '../speech/speak.js';
+import { say, primeDirectorAudio } from '../speech/say.js';
 import { unlockAudio, keywordHit, wrong } from '../sfx.js';
+
+// Same as the server: at least 15 words to send a story and earn its Dob.
+const MIN_WORDS = 15;
 
 // Writing: write a story to a brother/sister, a crew friend or a grown-up; spell check
 // highlights mistakes; friends can continue the story.
@@ -122,7 +125,8 @@ function Thread({ threadId, onBack, onContinue }) {
               className="listen-small"
               onClick={() => {
                 unlockAudio();
-                speak(p.body, { rate: 0.9 });
+                primeDirectorAudio();
+                say(p.body);
               }}
             >
               🔊 Listen
@@ -208,7 +212,8 @@ function Compose({ thread, onBack, onSent }) {
   };
 
   const wrongSet = useMemo(() => new Map((issues || []).map((i) => [clean(i.word), i])), [issues]);
-  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const words = text.trim() ? text.trim().split(/\s+/).filter((w) => /[a-z]/i.test(w)).length : 0;
+  const enough = words >= MIN_WORDS;
 
   if (!to) {
     return (
@@ -275,10 +280,13 @@ function Compose({ thread, onBack, onSent }) {
         />
       )}
       <div className="write-meta">
-        <span>{words} words</span>
+        <span className={enough ? 'saved' : ''}>
+          {enough ? `${words} words ✓` : `${words} / ${MIN_WORDS} words`}
+        </span>
         {issues && issues.length > 0 && <span className="miss-count">{issues.length} to fix: tap the red words</span>}
         {note && <span className="saved">{note}</span>}
       </div>
+      {!enough && words > 0 && <div className="muted small">Write at least {MIN_WORDS} words to send it and earn a Dibbly Dob ({MIN_WORDS - words} more to go!)</div>}
       {error && <div className="notice">{error}</div>}
       <div className="row-btns">
         {issues && issues.length > 0 && (
@@ -287,11 +295,11 @@ function Compose({ thread, onBack, onSent }) {
           </button>
         )}
         {issues === null ? (
-          <button className="big-btn primary" onClick={check} disabled={checking || words < 3}>
+          <button className="big-btn primary" onClick={check} disabled={checking || !enough}>
             {checking ? 'Checking…' : '🔍 Check my spelling'}
           </button>
         ) : (
-          <button className="big-btn primary" onClick={send} disabled={sending}>
+          <button className="big-btn primary" onClick={send} disabled={sending || !enough}>
             {sending ? 'Sending…' : issues.length ? 'Send anyway 🚀' : 'Send it 🚀'}
           </button>
         )}
@@ -325,7 +333,7 @@ function FixSheet({ issue, context, onFix, onClose }) {
       try {
         const d = await api.post('/api/kid/writing/say', { typed: issue.word, said: text, context });
         setWord(d.word);
-        speak(d.word);
+        say(d.word);
       } catch {
         wrong();
       } finally {
@@ -354,7 +362,7 @@ function FixSheet({ issue, context, onFix, onClose }) {
               <button className="big-btn primary" onClick={() => onFix(issue.word, word)}>
                 ✓ Fix it
               </button>
-              <button className="big-btn ghost" onClick={() => speak(word)}>
+              <button className="big-btn ghost" onClick={() => { primeDirectorAudio(); say(word); }}>
                 🔊
               </button>
             </div>

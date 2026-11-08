@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { chunkWord, speakableChunk } from '../reading/phonics.js';
-import { speakSequence } from '../speech/speak.js';
+import { say, primeDirectorAudio } from '../speech/say.js';
 
 export default function WordHelpSheet({ token, overrides, paid, onHelp, onClose }) {
   const word = token.display.replace(/[^A-Za-z0-9'’-]/g, '').replace(/-$/, '');
@@ -8,13 +8,10 @@ export default function WordHelpSheet({ token, overrides, paid, onHelp, onClose 
   const [revealed, setRevealed] = useState(paid);
   const [active, setActive] = useState(-1);
 
+  // Each sound, then the whole word, in the app's voice; the matching chunk lights up.
   const play = async () => {
-    for (let i = 0; i < chunks.length; i++) {
-      setActive(i);
-      await speakSequence([speakableChunk(chunks[i])], { rate: 0.75 });
-    }
-    setActive(chunks.length);
-    await speakSequence([token.norm], { rate: 0.9 });
+    primeDirectorAudio();
+    await say([...chunks.map(speakableChunk), token.norm], { onLine: (i) => setActive(i) });
     setActive(-1);
   };
 
