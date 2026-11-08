@@ -4334,3 +4334,8 @@ a.btn {
   animation: peek-pulse 1.2s ease-in-out infinite alternate;
   touch-action: manipulation;
 }
+.start-top.ready {
+  background: linear-gradient(135deg, #2bd96b, #c8ff3d);
+  color: #111;
+  box-shadow: 0 8px 30px rgba(120, 255, 90, 0.45);
+}

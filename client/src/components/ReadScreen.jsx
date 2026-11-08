@@ -355,6 +355,11 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
             🎤 {snap.readCount > 0 ? 'Keep reading' : 'Start reading'}
           </button>
         )}
+        {unlocked && (
+          <button className="start-top ready" onClick={finish}>
+            {isStory ? '★ Finished! Next ➜' : '🎬 Ready! Let’s film ➜'}
+          </button>
+        )}
         <div className="script-label">
           <span>{isStory ? 'STORY' : 'SCRIPT'}</span> {brief.title}
         </div>
