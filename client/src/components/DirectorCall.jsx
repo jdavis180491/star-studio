@@ -115,6 +115,7 @@ export function VoiceCall({ turnUrl, extra = {}, name, variant = 'director', hin
 
   const startCall = () => {
     unlockAudio();
+    stopDirector(); // anything still talking from the last screen stops first
     primeDirectorAudio();
     setPhase('connecting');
     setSeconds(0);

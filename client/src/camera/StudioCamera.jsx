@@ -3,6 +3,7 @@ import { createWeather, drawBackdrop, applyLook, drawFrame, drawStickers, sticke
 import { getSegmenter, createMasker } from './segmenter.js';
 import { WEATHER, BACKDROPS, LOOKS, FRAMES, MUSIC, STICKER_EMOJI } from '../shared/creative.js';
 import { unlockAudio, countdownBeep, greenlight } from '../sfx.js';
+import { say, primeDirectorAudio } from '../speech/say.js';
 
 export const MAX_SECONDS = 60;
 const W = 1280;
@@ -30,8 +31,33 @@ function coverRect(vw, vh) {
   return [(W - w) / 2, (H - h) / 2, w, h];
 }
 
+// Show the whole camera picture. A wide camera fills the frame; a tall one (iPad held upright)
+// is shown in full in the middle instead of being cropped to a zoomed-in strip.
+function fitRect(vw, vh) {
+  if (vw / vh >= 1.5) return coverRect(vw, vh);
+  const s = Math.min(W / vw, H / vh);
+  const w = vw * s;
+  const h = vh * s;
+  return [(W - w) / 2, (H - h) / 2, w, h];
+}
+
+/** A few quick sentences reminding them of the story they chose with the Director. */
+export function recapLine(brief, plan = {}, little = false) {
+  const title = brief?.title || 'today’s challenge';
+  const parts = [`Remember, the story you chose is ${title}.`];
+  if (!little) {
+    const how = [];
+    if (plan.mood) how.push(`make it ${plan.mood}`);
+    if (plan.ending) how.push(`finish with ${String(plan.ending).replace(/[.!?]+$/, '')}`);
+    if (how.length) parts.push(`${how.join(', and ')}.`.replace(/^./, (c) => c.toUpperCase()));
+  }
+  parts.push(little ? 'Big smile! Ready?' : 'Big energy. Ready?');
+  return parts.join(' ');
+}
+
 export default function StudioCamera({ brief, plan, channelName, little, onBack, onDone }) {
-  const [state, setState] = useState('init'); // init | denied | ready | countdown | recording | review
+  const [state, setState] = useState('init'); // init | denied | ready | recap | countdown | recording | review
+  const [recap, setRecap] = useState(null);
   const [fx, setFx] = useState(() => ({
     weather: plan?.weather || 'none',
     backdrop: plan?.backdrop || 'none',
@@ -100,7 +126,9 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    if (musicOn && (state === 'ready' || state === 'countdown' || state === 'recording')) a.play().catch(() => {});
+    // Music plays while they get ready, but NOT while filming: the iPad's echo cancelling fights
+    // speaker music and makes the voice crackle and drop out. The edit adds the music back in.
+    if (musicOn && (state === 'ready' || state === 'recap' || state === 'countdown')) a.play().catch(() => {});
     else a.pause();
   }, [musicOn, state]);
 
@@ -111,7 +139,8 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: { echoCancellation: true, noiseSuppression: true },
+        // Plain microphone: echo cancelling and noise suppression chop children's voices in and out.
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
       });
       streamRef.current = stream;
       const v = videoRef.current;
@@ -145,7 +174,8 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
       g.fillStyle = '#0a0a10';
       g.fillRect(0, 0, W, H);
       const hasVideo = v && v.readyState >= 2 && v.videoWidth;
-      const rect = hasVideo ? coverRect(v.videoWidth, v.videoHeight) : null;
+      const rect = hasVideo ? fitRect(v.videoWidth, v.videoHeight) : null;
+      const wide = hasVideo && v.videoWidth / v.videoHeight >= 1.5;
       const masker = maskerRef.current;
       if (hasVideo && f.backdrop !== 'none' && segRef.current && masker) {
         if (frameNo % 2 === 0) masker.update(segRef.current, v, now);
@@ -166,6 +196,12 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
         g.save();
         g.translate(W, 0);
         g.scale(-1, 1);
+        if (!wide) {
+          // Fill the sides with a soft, dark copy of the picture.
+          g.globalAlpha = 0.35;
+          g.drawImage(v, ...coverRect(v.videoWidth, v.videoHeight));
+          g.globalAlpha = 1;
+        }
         g.drawImage(v, ...rect);
         g.restore();
       }
@@ -229,8 +265,26 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
   };
 
   // ---- recording
-  const begin = () => {
+  // Tap record: the Director gives a quick reminder of their story, then 3-2-1.
+  const begin = async () => {
     unlockAudio();
+    primeDirectorAudio();
+    const words = recapLine(brief, plan, little);
+    setRecap(words);
+    setState('recap');
+    const a = audioRef.current;
+    if (a) a.volume = 0.06;
+    try {
+      await Promise.race([say(words), new Promise((r) => setTimeout(r, 15000))]);
+    } catch {
+      /* carry on */
+    }
+    if (a) a.volume = 0.22;
+    setRecap(null);
+    countdown();
+  };
+
+  const countdown = () => {
     setState('countdown');
     let n = 3;
     setCount(n);
@@ -265,7 +319,8 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
     chunks.current = [];
     let rec;
     try {
-      rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 3_000_000 });
+      // A smaller file uploads much faster (still sharp at 720p).
+      rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 1_600_000, audioBitsPerSecond: 128_000 });
     } catch {
       rec = new MediaRecorder(stream);
     }
@@ -311,7 +366,7 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
   const current = TABS.find((t) => t.id === tab);
   const left = Math.max(0, MAX_SECONDS - secs);
   const ring = 2 * Math.PI * 44;
-  const live = state === 'ready' || state === 'countdown' || state === 'recording';
+  const live = state === 'ready' || state === 'recap' || state === 'countdown' || state === 'recording';
 
   return (
     <div className={`screen studio-cam ${little ? 'is-little' : ''}`}>
@@ -332,7 +387,7 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
       </header>
 
       <main className="cam-main">
-        <div className={`viewfinder ${state === 'recording' ? 'rec' : ''}`}>
+        <div className={`viewfinder ${state === 'recording' ? 'rec' : ''} ${state === 'countdown' || state === 'recap' ? 'counting' : ''}`}>
           <video ref={videoRef} className="hidden-video" muted playsInline />
           <canvas
             ref={canvasRef}
@@ -344,7 +399,26 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
             onPointerUp={onUp}
             onPointerCancel={onUp}
           />
-          {state === 'review' && take && <video key={take.url} className="review" src={take.url} controls playsInline autoPlay />}
+          {state === 'review' && take && (
+            <video
+              key={take.url}
+              className="review"
+              src={take.url}
+              controls
+              playsInline
+              autoPlay
+              // Hear the backing music with the take, like the finished edit.
+              onPlay={(e) => {
+                const a = audioRef.current;
+                if (!a || !musicOn) return;
+                a.currentTime = e.currentTarget.currentTime % (a.duration || 1e9);
+                a.volume = 0.25;
+                a.play().catch(() => {});
+              }}
+              onPause={() => audioRef.current?.pause()}
+              onEnded={() => audioRef.current?.pause()}
+            />
+          )}
           {(state === 'init' || state === 'denied') && (
             <div className="vf-overlay">
               {state === 'denied' && <div className="notice">{error}. Grown-up: allow the camera for this site in Safari settings.</div>}
@@ -354,6 +428,12 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
             </div>
           )}
           {state === 'countdown' && <div className="count">{count}</div>}
+          {state === 'recap' && recap && (
+            <div className="recap">
+              <span>🎬 THE DIRECTOR</span>
+              {recap}
+            </div>
+          )}
           {state === 'recording' && left <= 10 && <div className="time-warn">{left}</div>}
           {live && plan?.ending && (
             <div className="ending-note">
@@ -366,7 +446,7 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
         {error && state !== 'denied' && <div className="notice">{error}</div>}
       </main>
 
-      {state !== 'review' && (
+      {(state === 'ready' || state === 'init' || state === 'denied') && (
         <section className="tray">
           <div className="tray-tabs">
             {TABS.map((t) => (

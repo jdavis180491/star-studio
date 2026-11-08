@@ -183,7 +183,8 @@ export async function buildEdit({ rawFile, edit, plan, brief, channelName, title
     v = `[c${i}]`;
   });
   fc.push(`${v}format=yuv420p,setsar=1[mainv]`);
-  if (hasAudio) fc.push(`[0:a]atrim=0:${seconds.toFixed(2)},asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo,apad=whole_dur=${seconds.toFixed(2)}[maina]`);
+  // async=1 smooths over gaps in the iPad's recording (they cause clicks and drop-outs).
+  if (hasAudio) fc.push(`[0:a]aresample=44100:async=1:first_pts=0,atrim=0:${seconds.toFixed(2)},asetpts=PTS-STARTPTS,aformat=channel_layouts=stereo,highpass=f=70,volume=1.4,apad=whole_dur=${seconds.toFixed(2)}[maina]`);
   else fc.push(`anullsrc=r=44100:cl=stereo,atrim=0:${seconds.toFixed(2)}[maina]`);
   // Cards.
   const silence = (label, d) => fc.push(`anullsrc=r=44100:cl=stereo,atrim=0:${d}[${label}]`);
@@ -197,11 +198,15 @@ export async function buildEdit({ rawFile, edit, plan, brief, channelName, title
   silence('oa', OUTRO);
   const segs = ['[iv][ia]', '[mainv][maina]', ...lyr.map((_, i) => `[lv${i}][la${i}]`), '[ov][oa]'];
   fc.push(`${segs.join('')}concat=n=${segs.length}:v=1:a=1[vout][voice]`);
-  // Music under the voice (ducked while the child talks), louder on the cards.
-  fc.push(`[voice]asplit=2[vk][vm]`);
-  fc.push(`[${musicIdx}:a]atrim=0:${total.toFixed(2)},asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo,volume=0.5,afade=t=out:st=${(total - 1).toFixed(2)}:d=1[mus]`);
-  fc.push(`[mus][vk]sidechaincompress=threshold=0.03:ratio=8:attack=15:release=400[duck]`);
-  fc.push(`[vm][duck]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.95[aout]`);
+  // Music all the way through: softer under the child's clip so their voice is clear, louder on the cards.
+  // (A steady level: automatic ducking made the music pump in and out or vanish.)
+  const clipFrom = INTRO.toFixed(2);
+  const clipTo = (INTRO + seconds).toFixed(2);
+  fc.push(
+    `[${musicIdx}:a]atrim=0:${total.toFixed(2)},asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo,` +
+      `volume='if(between(t,${clipFrom},${clipTo}),0.35,0.6)':eval=frame,afade=t=in:d=0.4,afade=t=out:st=${(total - 1).toFixed(2)}:d=1[mus]`
+  );
+  fc.push(`[voice][mus]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.9:level=0[aout]`);
 
   const out = path.join(workDir, 'final.mp4');
   await run([

@@ -63,17 +63,34 @@ async function fetchClip(line) {
   }
 }
 
+// One audio player is shared by everything that talks. If a new clip starts while another is
+// still playing, the old one is finished off first, so nothing is left waiting forever.
+let finishPrevious = null;
 function playClip(url) {
+  finishPrevious?.();
   return new Promise((resolve, reject) => {
     const a = audioEl();
-    a.onended = () => resolve();
-    a.onerror = () => reject(new Error('audio error'));
+    const done = (fn) => (arg) => {
+      if (finishPrevious === settle) finishPrevious = null;
+      a.onended = null;
+      a.onerror = null;
+      fn(arg);
+    };
+    const settle = done(resolve);
+    finishPrevious = settle;
+    a.onended = settle;
+    a.onerror = done(() => reject(new Error('audio error')));
     a.src = url;
-    a.play().catch(reject);
+    a.play().catch(done(reject));
   });
 }
 
+// Bumped by stopDirector(): anything queued to speak before then is dropped.
+let generation = 0;
+
 export function stopDirector() {
+  generation += 1;
+  finishPrevious?.();
   try {
     el?.pause();
   } catch {
@@ -83,10 +100,14 @@ export function stopDirector() {
 }
 
 /** Play lines in order. onLine(i) fires as each line starts (for captions). */
-export async function playLines(lines, { onLine } = {}) {
+export const speechGeneration = () => generation;
+
+export async function playLines(lines, { onLine, gen = generation } = {}) {
+  if (gen !== generation) return;
   const clips = lines.map(fetchClip);
   for (let i = 0; i < lines.length; i++) {
     const url = await clips[i];
+    if (gen !== generation) return; // stopped (e.g. a new screen started talking)
     onLine?.(i);
     let played = false;
     if (url) {

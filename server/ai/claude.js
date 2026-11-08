@@ -18,7 +18,7 @@ const getClient = () => (client ||= new Anthropic());
  * One structured-output request. Refusals are retried server-side on another model
  * (fallbacks: "default"); if this account doesn't accept that option we retry without it.
  */
-async function askJSON({ system, user, schema, maxTokens = 4000, effort = 'low' }) {
+async function askJSON({ system, user, schema, maxTokens = 4000, effort = 'low', timeoutMs = null }) {
   const params = {
     model: MODEL,
     max_tokens: maxTokens,
@@ -26,15 +26,17 @@ async function askJSON({ system, user, schema, maxTokens = 4000, effort = 'low' 
     messages: [{ role: 'user', content: user }],
     output_config: { format: zodOutputFormat(schema), effort },
   };
+  // A time limit (no retries) for steps a child is waiting on; the caller falls back if it runs out.
+  const reqOpts = timeoutMs ? { timeout: timeoutMs, maxRetries: 0 } : {};
   let res;
   try {
     res = await getClient().messages.parse(
       { ...params, fallbacks: 'default' },
-      { headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' } }
+      { headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' }, ...reqOpts }
     );
   } catch (err) {
     if (!(err instanceof Anthropic.BadRequestError)) throw err;
-    res = await getClient().messages.parse(params);
+    res = await getClient().messages.parse(params, reqOpts);
   }
   if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
   if (!res.parsed_output) throw new Error(`No usable output (stop: ${res.stop_reason})`);
@@ -232,7 +234,8 @@ Creator's plan: ${JSON.stringify(plan || {})}
 Clip duration: ${seconds} seconds
 ${transcript ? `What the creator says in the clip (timed transcript):\n${transcript}` : 'No transcript available: spread captions evenly and put a big hit near the end.'}
 ${remix ? 'This is a REMIX: make it feel different from a normal edit (different caption style and effect timing, more surprising).' : ''}`;
-  return askJSON({ system: EDIT_SYSTEM, user, schema: EditSchema, maxTokens: 4000, effort: 'low' });
+  // The child is waiting: if the plan takes more than 12 seconds, the built-in edit is used instead.
+  return askJSON({ system: EDIT_SYSTEM, user, schema: EditSchema, maxTokens: 3000, effort: 'low', timeoutMs: 12000 });
 }
 
 // ---------------------------------------------------------------- reading: Story Buddy
@@ -249,12 +252,14 @@ export const LEVELS = {
 
 const BUDDY_SYSTEM = `You are "Story Buddy", a playful, warm story-maker in a private reading game for children aged 4-11 in the UK.
 You are on a VOICE CALL with a child, inventing a story together that they will then read aloud. Your words are spoken by a voice actor: talk naturally, short and friendly, no emojis or lists.
-- 1-2 short sentences per turn (max 30 words; for young children max 18 simple words).
-- Ask ONE question at a time, react to their idea with excitement, build on it.
-- Find out: who the hero is, where it happens, and what goes wrong or what surprise happens. Optionally a funny detail.
+- 1-2 short sentences per turn (max 25 words; for young children max 15 simple words).
+- The whole call is EXACTLY TWO questions, then you write the story:
+  1. Your first line: a quick hello and ask who the story is about and where it happens (one question).
+  2. After their first answer: react with excitement in a few words, then ask what exciting thing happens or goes wrong.
+  3. After their second answer: react in a few words, say you're writing it now, and set done = true. Never ask a third question.
+- Fill in anything they didn't say yourself (a fun place, a silly problem) so the story always works.
 - Never ask for real names, school or address. If they give a real-sounding name, use it as a character name only if it sounds made up; otherwise suggest a fun character name.
 - If they're stuck, offer two silly ideas. If they say nothing, nudge gently.
-- When you have the hero, the place and the problem (or after 4 of their replies), say a short excited wrap-up ("Ooh, I'm writing it now!") and set done = true.
 Return the story ideas gathered so far each turn (null if not decided).`;
 
 const BuddySchema = z.object({

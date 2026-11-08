@@ -103,9 +103,14 @@ export default function EditSuite({ brief, plan, take, existing, title, track, o
       <main className="suite-main">
         {(phase === 'uploading' || phase === 'editing') && (
           <div className="suite-working">
-            <div className="reel-spin" aria-hidden>
-              <span />
-            </div>
+            {take?.url ? (
+              // Something to watch while the edit is made: their own take, on a loop.
+              <video className="suite-peek" src={take.url} muted autoPlay loop playsInline />
+            ) : (
+              <div className="reel-spin" aria-hidden>
+                <span />
+              </div>
+            )}
             <h1 className="suite-title">{phase === 'uploading' ? 'Sending to the edit suite' : 'Editing your video'}</h1>
             <div className="suite-step">{phase === 'uploading' ? `${Math.round(progress * 100)}%` : STEPS[step]}</div>
             <div className="meter suite-meter">
