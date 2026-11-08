@@ -3,7 +3,8 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { q, one, many } from '../db.js';
 import { requireKid } from '../auth.js';
-import { earnDobs, dobLeaderboard, rulesForKid } from '../lib/rewards.js';
+import { earnDobs, dobLeaderboard, DOB_VALUES } from '../lib/rewards.js';
+import { later, notifyFamily } from '../lib/notify.js';
 import { familySettings, crewForKid } from '../lib/family.js';
 import { wordsFor, pickWords } from '../data/wordBank.js';
 import { pickTopic } from '../data/topics.js';
@@ -207,7 +208,21 @@ export function learnRouter() {
       );
       if (!threadId) await q(`UPDATE letters SET thread_id = id WHERE id = $1`, [row.id]);
       const words = body.split(/\s+/).length;
-      const reward = await earnDobs(kid.id, threadId ? 'continue' : 'writing', { what: threadId ? `Continued a story (${words} words)` : `Wrote “${topic.slice(0, 60)}” (${words} words)` });
+      const reward = await earnDobs(
+        kid.id,
+        threadId ? 'continue' : 'writing',
+        { what: threadId ? `Continued a story (${words} words)` : `Wrote “${(topic || '').slice(0, 60)}” (${words} words)` },
+        { quiet: status === 'pending' }
+      );
+      if (status === 'pending') {
+        later(() =>
+          notifyFamily(kid.family_id, 'approvals', {
+            title: 'A story to check',
+            body: `${kid.name} wrote a story to a friend and earned 1 Dob. Tap to read it before it’s sent.`,
+            url: '/parent?tab=approvals',
+          })
+        );
+      }
       res.json({ ...reward, status });
     } catch (e) {
       next(e);
@@ -324,13 +339,7 @@ export function learnRouter() {
   });
 
   // ================================================================ DOBS
-  r.get('/kid/rules', async (req, res, next) => {
-    try {
-      res.json(await rulesForKid(req.kid.id));
-    } catch (e) {
-      next(e);
-    }
-  });
+  r.get('/kid/rules', (req, res) => res.json(DOB_VALUES));
 
   r.get('/kid/leaderboard', async (req, res, next) => {
     try {

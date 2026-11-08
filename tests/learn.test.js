@@ -60,14 +60,14 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   const crew = (await A.post('/api/parent/crews', { name: 'Pals', kidIds: [a1.id] })).data.crew;
   await B.post('/api/parent/crews/join', { code: crew.code, kidIds: [b1.id] });
 
-  // Grown-up A sets Dob values and maths settings
-  const rules = (await A.put('/api/parent/dob-rules', { rules: { reading: 4, writing: 3, continue: 2, spelling: 2, 'maths-times': 5, helpCost: 1 } })).data.rules;
-  assert.equal(rules.reading, 4);
-  assert.equal(rules['maths-addition'], 1, 'untouched values keep their defaults');
+  // Grown-up A sets maths settings (Dob values are fixed: 1 each, for every family)
+  assert.notEqual((await A.put('/api/parent/dob-rules', { rules: { reading: 50 } })).status, 200, 'grown-ups cannot change Dob values');
   await A.put(`/api/parent/kids/${a1.id}`, { maths: { timesTables: [7], bonds: [20] } });
 
   await A.post('/api/kid/login', { kidId: a1.id, pin: '1111' });
-  assert.equal((await A.get('/api/kid/rules')).data.helpCost, 1);
+  const rules = (await A.get('/api/kid/rules')).data;
+  assert.ok(Object.values(rules).every((v) => v === 1), 'every activity is worth 1 Dob');
+  assert.equal(rules.helpCost, undefined, 'word help never costs Dobs');
 
   // ---------------- Reading (offline Story Buddy + offline story)
   let turn = (await A.post('/api/kid/story/turn', { history: [], plan: {} })).data;
@@ -82,9 +82,9 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   assert.match(story.text, /dragon called Zog/);
   assert.ok(story.keywords.length >= 1);
   let r = (await A.post(`/api/kid/stories/${story.id}/read`, { stats: { wordsRead: 50, totalWords: 55, keywords: story.keywords, keywordsRead: story.keywords } })).data;
-  assert.equal(r.gained.dobs, 4);
+  assert.equal(r.gained.dobs, 1);
   r = (await A.post(`/api/kid/stories/${story.id}/read`, { stats: { wordsRead: 55, totalWords: 55 } })).data;
-  assert.equal(r.dobs, 8, 'reading earns every time');
+  assert.equal(r.dobs, 2, 'reading earns every time');
   assert.equal((await A.get('/api/kid/stories')).data.stories[0].reads, 2);
 
   // ---------------- Writing
@@ -97,7 +97,7 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   // to a sibling: delivered straight away
   r = (await A.post('/api/kid/letters', { to: { kidId: a2.id }, topic: 'Hi', body: 'Dear Bob, a penguin is in the bath.' })).data;
   assert.equal(r.status, 'delivered');
-  assert.equal(r.gained.dobs, 3);
+  assert.equal(r.gained.dobs, 1);
   // to a crew friend: waits for grown-up A
   r = (await A.post('/api/kid/letters', { to: { kidId: b1.id }, topic: topic.topic, body: 'Dear Cat, my shoes started talking today!' })).data;
   assert.equal(r.status, 'pending');
@@ -131,7 +131,7 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   assert.equal((await A.post(`/api/kid/practice/${sp.setId}/finish`, { results: [{ correct: true }] })).status, 400, 'must finish all 5');
   r = (await A.post(`/api/kid/practice/${sp.setId}/finish`, { results: sp.items.map((_, i) => ({ correct: i < 4, tries: i + 1, gaveUp: i === 4 })) })).data;
   assert.equal(r.score, 4);
-  assert.equal(r.gained.dobs, 2);
+  assert.equal(r.gained.dobs, 1);
   assert.equal((await A.post(`/api/kid/practice/${sp.setId}/finish`, { results: sp.items.map(() => ({ correct: true })) })).status, 409, 'no double claiming');
 
   // ---------------- Maths (settings respected)
@@ -141,14 +141,9 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   const bonds = (await A.post('/api/kid/maths/start', { type: 'bonds' })).data;
   assert.ok(bonds.questions.every((q) => q.q.endsWith('= 20') && q.answer >= 0 && q.answer <= 20));
   r = (await A.post(`/api/kid/practice/${times.setId}/finish`, { results: times.questions.map(() => ({ correct: true })) })).data;
-  assert.equal(r.gained.dobs, 5);
+  assert.equal(r.gained.dobs, 1);
   assert.equal((await A.post('/api/kid/maths/start', { type: 'cake' })).status, 400);
-
-  // ---------------- Word help now costs 1 Dob
-  const before = (await A.get('/api/kid/dobs')).data.dobs;
-  const help = (await A.post('/api/kid/help', { word: 'dragon' })).data;
-  assert.equal(help.paid, true);
-  assert.equal(help.dobs, before - 1);
+  assert.notEqual((await A.post('/api/kid/help', { word: 'dragon' })).status, 200, 'no paid word help any more');
 
   // ---------------- Grown-up: good / naughty / spent, and the feed
   r = (await A.post('/api/parent/dobs/adjust', { kidId: a1.id, reason: 'good', amount: 3, note: 'Tidied room' })).data;
@@ -168,6 +163,24 @@ test('Dibbly Dobs learning sections', { skip: !DB, timeout: 120000 }, async (t) 
   const board = (await A.get('/api/kid/leaderboard')).data;
   assert.deepEqual(board.rows.map((x) => x.channelName).sort(), ['Ann TV', 'Bob TV', 'Cat TV']);
   assert.equal(board.rows[0].channelName, 'Ann TV');
+
+  // ---------------- Phone notifications
+  let n = (await A.get('/api/parent/notifications')).data;
+  assert.ok(n.publicKey.length > 40, 'push key is made automatically');
+  assert.deepEqual(n.prefs, { approvals: true, dobs: true }, 'both on by default');
+  assert.equal(n.phones, 0);
+  assert.equal((await A.post('/api/parent/notifications/subscribe', { subscription: { endpoint: 'http://evil', keys: {} } })).status, 400);
+  const sub = { endpoint: 'https://localhost:1/push/abc', keys: { p256dh: 'BOr' + 'x'.repeat(84), auth: 'y'.repeat(22) } };
+  assert.equal((await A.post('/api/parent/notifications/subscribe', { subscription: sub, origin: 'https://dobs.example' })).status, 200);
+  await A.post('/api/parent/notifications/subscribe', { subscription: sub }); // same phone twice = one phone
+  n = (await A.get('/api/parent/notifications')).data;
+  assert.equal(n.phones, 1);
+  assert.equal((await B.get('/api/parent/notifications')).data.phones, 0, 'phones belong to one family');
+  assert.equal(n.publicKey, (await B.get('/api/parent/notifications')).data.publicKey, 'one key for the app');
+  assert.deepEqual((await A.put('/api/parent/notifications/prefs', { approvals: true, dobs: false })).data.prefs, { approvals: true, dobs: false });
+  assert.equal((await A.post('/api/parent/notifications/test')).data.sent, 0, 'an unreachable phone does not crash anything');
+  await A.post('/api/parent/notifications/unsubscribe', { endpoint: sub.endpoint });
+  assert.equal((await A.get('/api/parent/notifications')).data.phones, 0);
 
   // ---------------- Stats for the grown-up
   const ps = (await A.get('/api/parent/practice-stats')).data.kids.find((k) => k.kidId === a1.id);

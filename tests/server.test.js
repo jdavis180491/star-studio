@@ -87,7 +87,7 @@ test('signed media links expire and cannot be tampered with', () => {
 });
 
 import { makeSet, mathsSettings } from '../server/lib/maths.js';
-import { dobRules, DEFAULT_RULES } from '../server/lib/rewards.js';
+import { DOB_VALUES, DOB_ACTIVITIES } from '../server/lib/rewards.js';
 
 test('maths sets follow year group and settings', () => {
   for (let n = 0; n < 30; n++) {
@@ -102,10 +102,11 @@ test('maths sets follow year group and settings', () => {
   assert.deepEqual(mathsSettings({ maths: { timesTables: [99], bonds: [] } }), { timesTables: [2, 5, 10], bonds: [10] }, 'bad settings fall back');
 });
 
-test('Dob values are whole numbers between 0 and 50', () => {
-  const r = dobRules({ dobRules: { reading: '7', writing: -3, spelling: 999, maths: 'x' } });
-  assert.equal(r.reading, 7);
-  assert.equal(r.writing, 0);
-  assert.equal(r.spelling, 50);
-  assert.equal(dobRules({}).studio, DEFAULT_RULES.studio);
+test('every activity is worth exactly 1 Dob, and the values cannot be changed', () => {
+  assert.equal(Object.keys(DOB_VALUES).length, DOB_ACTIVITIES.length);
+  assert.ok(Object.values(DOB_VALUES).every((v) => v === 1));
+  assert.throws(() => {
+    'use strict';
+    DOB_VALUES.reading = 5;
+  });
 });

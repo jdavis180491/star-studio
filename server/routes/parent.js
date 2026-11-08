@@ -14,7 +14,8 @@ import { videoForClient } from '../lib/videos.js';
 import { storageKind } from '../media/storage.js';
 import { deleteVideoFiles } from './kid.js';
 import { AVATAR_DEFAULT, FREE_ITEMS } from '../lib/catalog.js';
-import { DOB_ACTIVITIES, dobRules, grant } from '../lib/rewards.js';
+import { grant } from '../lib/rewards.js';
+import { vapidKeys, notifyPrefs, notifyFamily } from '../lib/notify.js';
 import { TIMES_TABLES, BOND_TARGETS, mathsSettings, MATHS_TYPES } from '../lib/maths.js';
 import { eventForClient } from './learn.js';
 
@@ -132,6 +133,65 @@ export function parentRouter() {
       for (const v of vids) await deleteVideoFiles(v);
       await q(`DELETE FROM kids WHERE id = $1`, [k.id]);
       res.json({ ok: true, deletedVideos: vids.length });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ------------------------------------------------------------- phone notifications
+  r.get('/notifications', async (req, res, next) => {
+    try {
+      const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
+      const n = await one(`SELECT COUNT(*)::int AS n FROM push_subs WHERE family_id = $1`, [fam(req)]);
+      res.json({ publicKey: (await vapidKeys()).publicKey, prefs: notifyPrefs(f.settings), phones: n.n });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.post('/notifications/subscribe', async (req, res, next) => {
+    try {
+      const sub = req.body?.subscription || {};
+      const endpoint = String(sub.endpoint || '');
+      const keys = sub.keys || {};
+      if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000 || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') {
+        return res.status(400).json({ error: 'That phone could not be set up for notifications' });
+      }
+      const origin = /^https:\/\/[\w.-]+(:\d+)?$/.test(req.body?.origin || '') ? req.body.origin : null;
+      await q(
+        `INSERT INTO push_subs (family_id, endpoint, keys, origin) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (endpoint) DO UPDATE SET family_id = EXCLUDED.family_id, keys = EXCLUDED.keys, origin = EXCLUDED.origin`,
+        [fam(req), endpoint, { p256dh: keys.p256dh.slice(0, 200), auth: keys.auth.slice(0, 100) }, origin]
+      );
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.post('/notifications/unsubscribe', async (req, res, next) => {
+    try {
+      await q(`DELETE FROM push_subs WHERE family_id = $1 AND endpoint = $2`, [fam(req), String(req.body?.endpoint || '')]);
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.put('/notifications/prefs', async (req, res, next) => {
+    try {
+      const prefs = { approvals: req.body?.approvals !== false, dobs: req.body?.dobs !== false };
+      await q(`UPDATE families SET settings = settings || $2::jsonb WHERE id = $1`, [fam(req), JSON.stringify({ notify: prefs })]);
+      res.json({ prefs });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.post('/notifications/test', async (req, res, next) => {
+    try {
+      const sent = await notifyFamily(fam(req), 'test', { title: 'Dibbly Dobs', body: 'Notifications are working 🎉', url: '/parent' }, { force: true });
+      res.json({ sent });
     } catch (e) {
       next(e);
     }
@@ -521,26 +581,6 @@ export function parentRouter() {
   });
 
   // ------------------------------------------------------------- Dibbly Dobs
-  r.get('/dob-rules', async (req, res, next) => {
-    try {
-      const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
-      res.json({ activities: DOB_ACTIVITIES, rules: dobRules(f.settings) });
-    } catch (e) {
-      next(e);
-    }
-  });
-
-  r.put('/dob-rules', async (req, res, next) => {
-    try {
-      const f = await one(`SELECT settings FROM families WHERE id = $1`, [fam(req)]);
-      const rules = dobRules({ dobRules: { ...dobRules(f.settings), ...(req.body?.rules || {}) } });
-      await q(`UPDATE families SET settings = settings || $2::jsonb WHERE id = $1`, [fam(req), JSON.stringify({ dobRules: rules })]);
-      res.json({ rules });
-    } catch (e) {
-      next(e);
-    }
-  });
-
   // Every Dob earned or spent, newest first, with what they did.
   r.get('/dobs', async (req, res, next) => {
     try {

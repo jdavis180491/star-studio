@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { chunkWord, speakableChunk } from '../reading/phonics.js';
 import { speakSequence } from '../speech/speak.js';
-import { DobIcon } from './Dob.jsx';
 
-export default function WordHelpSheet({ token, overrides, paid, coins = 0, helpCost = 0, onPay, onClose }) {
+export default function WordHelpSheet({ token, overrides, paid, onHelp, onClose }) {
   const word = token.display.replace(/[^A-Za-z0-9'’-]/g, '').replace(/-$/, '');
   const chunks = chunkWord(token.norm, overrides);
   const [revealed, setRevealed] = useState(paid);
@@ -20,12 +19,10 @@ export default function WordHelpSheet({ token, overrides, paid, coins = 0, helpC
   };
 
   const help = () => {
-    onPay(token.norm);
+    onHelp(token.norm);
     setRevealed(true);
     play();
   };
-
-  const free = paid || !helpCost || coins < helpCost;
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -46,14 +43,7 @@ export default function WordHelpSheet({ token, overrides, paid, coins = 0, helpC
         <div className="sheet-actions">
           {!revealed ? (
             <button className="big-btn pink" onClick={help}>
-              Break it down{' '}
-              {free ? (
-                <span className="price">FREE</span>
-              ) : (
-                <span className="price">
-                  <DobIcon size={20} /> {helpCost}
-                </span>
-              )}
+              Break it down
             </button>
           ) : (
             <button className="big-btn pink" onClick={play}>

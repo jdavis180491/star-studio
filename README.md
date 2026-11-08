@@ -1,8 +1,9 @@
 # 🟢 Dibbly Dobs
 
 A private learning and creativity app for children aged 4–11, played on an iPad in Safari.
-Children earn **Dibbly Dobs** for everything they do. Grown-ups decide what each activity is worth,
-can add Dobs for good behaviour, take some away, or take off what they spend at the shops.
+Children earn **1 Dibbly Dob** for every activity they finish (the same for every family, so it's fair).
+Grown-ups can add Dobs for good behaviour, take some away, or take off what they spend at the shops.
+Word help is always free. Grown-ups can get **phone notifications** when something needs approving or a child earns a Dob.
 
 **Five sections:**
 - 🎬 **Star Studio**: the once-a-day video challenge. Read the script, then a word moment, a call with the Director, the live effects camera, the auto-edit, and finally the crew premiere.
@@ -31,6 +32,10 @@ Also: a Dibbly Dobs leaderboard (family and crew, resets Monday), trophies at 50
 ### App Storage (for videos)
 In Replit, open **Object Storage / App Storage** and create a bucket. Videos are then stored privately and survive restarts.
 Without it, videos are kept on the server's temporary disk and can disappear.
+
+### Phone notifications
+Nothing to set up on Replit. On each grown-up's phone: open the grown-ups' page in Safari, tap Share → **Add to Home Screen**,
+open **Dobs Grown-ups** from the Home Screen, log in, then **Settings → Turn on notifications on this phone** (iPhone needs iOS 16.4+).
 
 ### Publishing
 Use **Reserved VM**, or set Autoscale's **maximum machines to 1**. Video editing runs in the background on the server, so one always-on machine works best.
@@ -63,7 +68,8 @@ node scripts/make-music.mjs     # regenerate the original music loops
 | Crews, premieres | `server/lib/family.js`, `server/lib/videos.js`, `server/routes/kid.js` |
 | Grown-ups dashboard | `client/src/parent/ParentApp.jsx`, `server/routes/parent.js` |
 | Reading, Writing, Spelling, Maths | `client/src/learn/`, `server/routes/learn.js`, `server/lib/maths.js` |
-| Dibbly Dobs (values, earning, adjustments, leaderboard) | `server/lib/rewards.js` |
+| Dibbly Dobs (earning, adjustments, leaderboard) | `server/lib/rewards.js` |
+| Phone notifications | `server/lib/notify.js`, `client/src/parent/Notifications.jsx`, `client/public/sw.js` |
 | Database schema | `server/db.js` (migrations run on start) |
 
 **Privacy:**

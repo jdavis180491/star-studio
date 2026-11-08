@@ -4119,3 +4119,18 @@ a.btn {
   gap: 10px;
   margin-top: 24px;
 }
+
+/* Phone notifications card */
+.notify-steps {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  padding: 14px 16px;
+  line-height: 1.5;
+}
+.notify-steps ol {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.notify-steps li {
+  margin: 4px 0;
+}

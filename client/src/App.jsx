@@ -134,8 +134,6 @@ export default function App() {
         key={`read-${attempt}`}
         brief={prod.brief}
         coins={kid.dobs}
-        helpCost={rules?.helpCost || 0}
-        onHelp={(word) => api.post('/api/kid/help', { word }).then((r) => applyReward({ dobs: r.dobs })).catch(() => {})}
         onBack={backToStudio}
         onUnlocked={afterRead}
       />

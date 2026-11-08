@@ -247,6 +247,22 @@ const MIGRATIONS = [
   ALTER TABLE kids ADD COLUMN IF NOT EXISTS dobs_earned INT NOT NULL DEFAULT 0;
   UPDATE kids k SET dobs_earned = COALESCE((SELECT SUM(e.dobs) FROM events e WHERE e.kid_id = k.id AND e.dobs > 0), 0);
   `,
+  // 5: phone notifications for grown-ups (Web Push). Safe to re-run.
+  `
+  CREATE TABLE IF NOT EXISTS app_kv (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS push_subs (
+    id SERIAL PRIMARY KEY,
+    family_id INT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+    endpoint TEXT UNIQUE NOT NULL,
+    keys JSONB NOT NULL,
+    origin TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS push_subs_family ON push_subs (family_id);
+  `,
 ];
 
 export async function migrate() {

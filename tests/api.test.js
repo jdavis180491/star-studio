@@ -125,8 +125,6 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal(read.gained.dobs, 0, 'reading the script only unlocks the next step');
   assert.equal((await A.post('/api/kid/read', { stats: {} })).data.already, true, 'once a day');
   await A.post('/api/kid/word', { result: { type: 'spell' } });
-  const help = (await A.post('/api/kid/help', { word: 'launch' })).data;
-  assert.equal(help.paid, false, 'word help is free by default');
 
   // Director call works without Claude (scripted fallback)
   let plan = {};
@@ -166,9 +164,9 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   await waitFor(async () => (await A.get(`/api/kid/videos/${vid}`)).data.video.status === 'ready', 120000);
   assert.equal((await A.post(`/api/kid/videos/${vid}/remix`)).status, 409, 'only one remix');
 
-  // Post → Dibbly Dobs (3 by default, doubled on a viral hit); then B can't see it before approval/premiere
+  // Post → 1 Dibbly Dob (doubled on a viral hit); then B can't see it before approval/premiere
   const posted = (await A.post(`/api/kid/videos/${vid}/post`)).data;
-  assert.equal(posted.gained.dobs, posted.viral ? 6 : 3);
+  assert.equal(posted.gained.dobs, posted.viral ? 2 : 1);
   assert.equal(posted.streak, 1);
   assert.equal((await A.post('/api/kid/videos', { plan })).status, 409, 'one challenge a day');
 
@@ -210,8 +208,9 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal(aRowBoard.weekDobs, posted.gained.dobs + 1, 'video Dobs + 1 for the award');
 
   // Shop: buy, equip, decor; trophies
+  await A.post('/api/parent/dobs/adjust', { kidId: kidA.id, reason: 'good', amount: 2, note: 'Helped tidy up' });
   const shopBefore = (await A.get('/api/kid/shop')).data;
-  assert.equal(shopBefore.dobs, posted.gained.dobs + 1, 'video Dobs + the award Dob');
+  assert.equal(shopBefore.dobs, posted.gained.dobs + 1 + 2, 'video Dobs + the award Dob + 2 for good behaviour');
   const bought = await A.post('/api/kid/shop/buy', { itemId: 'hat-cap' });
   assert.equal(bought.status, 200);
   assert.equal(bought.data.dobs, shopBefore.dobs - 3);

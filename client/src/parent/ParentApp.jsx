@@ -6,6 +6,7 @@ import { tokenizeBrief, normalizeWord, isKeywordForm } from '../reading/words.js
 import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 import { unlockAudio } from '../sfx.js';
 import { PrivacySheet } from './Privacy.jsx';
+import NotificationsCard from './Notifications.jsx';
 
 const TABS = [
   ['kids', 'Kids'],
@@ -23,7 +24,11 @@ const MODE_NAME = { star: 'Older', little: 'Young', family: 'Family channel' };
 export default function ParentApp() {
   const [me, setMe] = useState(null);
   const [status, setStatus] = useState(null);
-  const [tab, setTab] = useState('kids');
+  // A notification can open a tab directly, e.g. /parent?tab=approvals
+  const [tab, setTab] = useState(() => {
+    const t = new URLSearchParams(location.search).get('tab');
+    return TABS.some(([id]) => id === t) ? t : 'kids';
+  });
   const [pending, setPending] = useState(0);
 
   const load = useCallback(async () => {
@@ -951,6 +956,7 @@ function Settings({ status }) {
 
   return (
     <section>
+      <NotificationsCard />
       <div className="p-card">
         <h2>Director’s voice</h2>
         <div className="p-form">
@@ -1061,16 +1067,13 @@ const TYPE_LABEL = {
 
 function Dobs() {
   const [data, setData] = useState(null);
-  const [rules, setRules] = useState(null);
   const [form, setForm] = useState(null); // { kidId, reason, amount, note }
-  const [saved, setSaved] = useState(false);
   const { busy, err, run } = useAction();
   const load = () => api.get('/api/parent/dobs').then(setData);
   useEffect(() => {
     load();
-    api.get('/api/parent/dob-rules').then(setRules);
   }, []);
-  if (!data || !rules) return <div className="muted">Loading…</div>;
+  if (!data) return <div className="muted">Loading…</div>;
 
   const submit = () =>
     run('…', async () => {
@@ -1082,8 +1085,8 @@ function Dobs() {
   return (
     <section>
       <p className="muted">
-        Children earn Dibbly Dobs instantly when they finish something, using the values you set below. You see exactly what they did, and you can add Dobs for
-        good behaviour, take some away for naughty behaviour, or take off what they spend at the shops.
+        Every activity earns 1 Dibbly Dob, the same for every child. Add Dobs for good behaviour, take some away for naughty behaviour, or take off what
+        they spend at the shops.
       </p>
       <div className="dob-kids">
         {data.kids.map((k) => (
@@ -1155,51 +1158,6 @@ function Dobs() {
         </table>
       </div>
 
-      <div className="p-card">
-        <h2>Dob values</h2>
-        <p className="muted">How many Dibbly Dobs each activity is worth. Set 0 to give none.</p>
-        <div className="rules">
-          {rules.activities.map((a) => (
-            <label key={a.id} className="rule">
-              <span>
-                {a.name} <em>({a.hint})</em>
-              </span>
-              <input
-                type="number"
-                min="0"
-                max="50"
-                inputMode="numeric"
-                value={rules.rules[a.id]}
-                onChange={(e) => {
-                  setSaved(false);
-                  setRules({ ...rules, rules: { ...rules.rules, [a.id]: e.target.value } });
-                }}
-              />
-            </label>
-          ))}
-          <label className="rule">
-            <span>
-              Word help costs <em>(when reading; free if they can’t afford it)</em>
-            </span>
-            <input type="number" min="0" max="10" inputMode="numeric" value={rules.rules.helpCost} onChange={(e) => { setSaved(false); setRules({ ...rules, rules: { ...rules.rules, helpCost: e.target.value } }); }} />
-          </label>
-        </div>
-        <div className="p-actions">
-          <button
-            className="btn primary"
-            onClick={() =>
-              run('…', async () => {
-                const out = await api.put('/api/parent/dob-rules', { rules: rules.rules });
-                setRules({ ...rules, rules: out.rules });
-                setSaved(true);
-              })
-            }
-          >
-            Save values
-          </button>
-          {saved && <span className="saved">Saved ✓</span>}
-        </div>
-      </div>
     </section>
   );
 }

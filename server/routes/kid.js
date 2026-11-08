@@ -7,7 +7,8 @@ import { requireKid, requireDevice } from '../auth.js';
 import { dayISO, weekStartISO, weekday, localHour, PREMIERE_HOUR } from '../lib/dates.js';
 import { briefForKids } from '../lib/briefs.js';
 import { scopeForKid, crewForKid, scopeMembers, publicKid, familySettings } from '../lib/family.js';
-import { grant, markDaily, spend, nextStreak, rulesForKid, BONUS, VIRAL_CHANCE } from '../lib/rewards.js';
+import { grant, markDaily, spend, nextStreak, DOB_VALUES, BONUS, VIRAL_CHANCE } from '../lib/rewards.js';
+import { later, notifyFamily } from '../lib/notify.js';
 import { SHOP, STICKERS, AWARDS, cleanAvatar } from '../lib/catalog.js';
 import { premiereState, videoForClient } from '../lib/videos.js';
 import { rateLimit } from '../lib/rateLimit.js';
@@ -93,19 +94,6 @@ export function kidRouter() {
   r.post('/kid/word', async (req, res, next) => {
     try {
       res.json(await markDaily(req.kid.id, 'word', { result: req.body?.result || {} }));
-    } catch (e) {
-      next(e);
-    }
-  });
-
-  // Word help costs whatever the grown-up set (free by default), and is free when
-  // you can't afford it. Never blocked.
-  r.post('/kid/help', async (req, res, next) => {
-    try {
-      const { helpCost } = await rulesForKid(req.kid.id);
-      if (!helpCost) return res.json({ dobs: req.kid.dobs, paid: false, cost: 0 });
-      const out = await spend(req.kid.id, helpCost, 'help', { word: String(req.body?.word || '').slice(0, 30) });
-      res.json(out ? { dobs: out.dobs, paid: true, cost: helpCost } : { dobs: req.kid.dobs, paid: false, cost: helpCost });
     } catch (e) {
       next(e);
     }
@@ -224,14 +212,21 @@ export function kidRouter() {
         if (dup) return { status: 409, body: { error: 'Already posted today' } };
         const viral = Math.random() < VIRAL_CHANCE;
         const kws = (v.keywords_said || []).slice(0, 3);
-        const rules = await rulesForKid(v.kid_id);
-        const dobs = rules.studio * (viral ? 2 : 1) + kws.length * BONUS.keyword;
+        const dobs = DOB_VALUES.studio * (viral ? 2 : 1) + kws.length * BONUS.keyword;
         const k = (await c.query(`SELECT last_post_date, streak, best_streak FROM kids WHERE id = $1 FOR UPDATE`, [v.kid_id])).rows[0];
         const streak = nextStreak(k.last_post_date, k.streak);
         await c.query(`UPDATE kids SET streak = $2, best_streak = GREATEST(best_streak, $2), last_post_date = $3 WHERE id = $1`, [v.kid_id, streak, dayISO()]);
         const what = `Posted “${v.title || v.brief?.title}”${viral ? ' (viral hit: double Dobs!)' : ''}${kws.length ? ` + said ${kws.length} unlock word${kws.length > 1 ? 's' : ''} on camera` : ''}`;
-        const g = await grant(c, v.kid_id, 'studio', { dobs, meta: { what, video: v.id, viral, keywords: kws } });
+        const g = await grant(c, v.kid_id, 'studio', { dobs, meta: { what, video: v.id, viral, keywords: kws }, quiet: true });
         await c.query(`UPDATE videos SET status = 'submitted', submitted_at = now(), viral = $2, followers_awarded = $3 WHERE id = $1`, [v.id, viral, dobs]);
+        const title = v.title || v.brief?.title || 'today’s video';
+        later(() =>
+          notifyFamily(req.kid.family_id, 'approvals', {
+            title: 'A video is ready to approve',
+            body: `${req.kid.name} posted “${title}” and earned ${dobs === 1 ? '1 Dob' : `${dobs} Dobs`}. Tap to watch and approve.`,
+            url: '/parent?tab=approvals',
+          })
+        );
         return { status: 200, body: { ...g, viral, keywordsSaid: kws, streak } };
       });
       res.status(out.status).json(out.body);
