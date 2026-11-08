@@ -91,7 +91,9 @@ export class ReadingTracker {
         }
         this.misses.set(`${sessionKey}:${k}`, words[k]);
         const close = [...this.misses.values()].filter((w) => closeTry(this.tokens[cursor].norm, w)).length;
-        if (close >= 2 && !this.tokens[cursor].filler) {
+        // After word help they've heard it: two clear tries count, even if the engine hears a different word.
+        const afterHelp = cursor === this.helpedAt && this.misses.size >= 2;
+        if ((close >= 2 || afterHelp) && !this.tokens[cursor].filler) {
           this.status[cursor] = 'read';
           cursor = this._skipDone(cursor + 1);
           stuck = null;

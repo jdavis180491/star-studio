@@ -53,10 +53,11 @@ export function DobsLogo({ small }) {
 
 /** Full-screen "you earned Dibbly Dobs!" moment. */
 export function DobReward({ earned, total, title = 'Nice one!', sub, onDone, extra }) {
-  const [shown, setShown] = useState(0);
+  // Count up from 1 (never show "+0" for a Dob they've earned).
+  const [shown, setShown] = useState(earned > 0 ? 1 : 0);
   useEffect(() => {
-    if (!earned) return undefined;
-    let i = 0;
+    if (!earned || earned <= 1) return undefined;
+    let i = 1;
     const t = setInterval(() => {
       i += 1;
       setShown(i);
@@ -84,7 +85,9 @@ export function DobReward({ earned, total, title = 'Nice one!', sub, onDone, ext
       )}
       {sub && <div className="muted-line">{sub}</div>}
       {extra}
-      <div className="muted-line">You have {total} Dibbly Dobs</div>
+      <div className="muted-line">
+        You have {total} Dibbly Dob{total === 1 ? '' : 's'}
+      </div>
       <button className="big-btn primary" onClick={onDone}>
         Brilliant ➜
       </button>
