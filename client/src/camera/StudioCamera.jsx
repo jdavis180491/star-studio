@@ -489,7 +489,12 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
           )}
           {(state === 'init' || state === 'denied' || state === 'starting') && (
             <div className="vf-overlay">
-              {state === 'denied' && <div className="notice">{error}</div>}
+              {state === 'denied' && (
+                <div className="notice">
+                  {error}
+                  <div className="small">Grown-up: Grown-ups → Settings → Camera check (on this iPad) tells you exactly what to change.</div>
+                </div>
+              )}
               {state === 'starting' ? (
                 <div className="cam-starting">
                   Starting the camera…
