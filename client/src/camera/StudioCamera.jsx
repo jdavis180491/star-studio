@@ -133,24 +133,79 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
   }, [musicOn, state]);
 
   // ---- camera
+  // Turning the camera on, carefully: some iPads refuse particular settings, Low Power Mode can
+  // stop the picture playing, and permissions can be off. Each case gets a fix or a clear message.
+  const [needTap, setNeedTap] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const cameraProblem = (e) => {
+    const n = e?.name || '';
+    if (n === 'NotAllowedError' || n === 'SecurityError')
+      return 'The camera is switched off for Dibbly Dobs. Grown-up: on the iPad open Settings → Safari → Camera → Allow (and Microphone → Allow), then come back and tap Camera on.';
+    if (n === 'NotReadableError' || n === 'AbortError') return 'The camera is busy. Close any other app using the camera (like FaceTime), then tap Camera on.';
+    if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No camera was found on this device.';
+    if (n === 'NoMediaDevices') return 'This browser can’t use the camera. Open Dibbly Dobs in Safari (not inside another app).';
+    return `The camera didn’t start (${n || 'unknown problem'}). Tap Camera on to try again.`;
+  };
+
+  const startPicture = async () => {
+    const v = videoRef.current;
+    try {
+      v.muted = true;
+      await v.play();
+      setNeedTap(false);
+    } catch {
+      setNeedTap(true); // e.g. Low Power Mode: one tap starts it
+    }
+  };
+
   const openCamera = async () => {
     unlockAudio();
     setError(null);
+    setNeedTap(false);
+    setState('starting');
+    const slowTimer = setTimeout(() => setSlow(true), 6000);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-        // Plain microphone: echo cancelling and noise suppression chop children's voices in and out.
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
-      });
+      if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no media'), { name: 'NoMediaDevices' });
+      // Ask for the best picture first; if the iPad says no, ask more simply.
+      const tries = [
+        {
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          // Plain microphone: echo cancelling and noise suppression chop children's voices in and out.
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+        },
+        { video: { facingMode: 'user' }, audio: true },
+        { video: true, audio: true },
+        { video: true, audio: false },
+      ];
+      let stream = null;
+      let lastErr = null;
+      for (const c of tries) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(c);
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.name === 'NotAllowedError' || e.name === 'SecurityError') break; // asking again won't help
+        }
+      }
+      if (!stream) throw lastErr;
       streamRef.current = stream;
       const v = videoRef.current;
       v.srcObject = stream;
-      await v.play().catch(() => {});
+      await startPicture();
       setState('ready');
       audioRef.current?.play().catch(() => {});
+      // No picture after a few seconds? Offer the tap-to-start button.
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.readyState < 2) setNeedTap(true);
+      }, 2500);
     } catch (e) {
+      console.warn('Camera failed:', e?.name, e?.message);
       setState('denied');
-      setError(e.name === 'NotAllowedError' ? 'Camera blocked' : 'No camera found');
+      setError(cameraProblem(e));
+    } finally {
+      clearTimeout(slowTimer);
+      setSlow(false);
     }
   };
 
@@ -400,7 +455,8 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
           </aside>
         )}
         <div className={`viewfinder ${state === 'recording' ? 'rec' : ''} ${state === 'countdown' || state === 'recap' ? 'counting' : ''}`}>
-          <video ref={videoRef} className="hidden-video" muted playsInline />
+          {/* The live camera sits under the effects picture; iPads only keep it playing if it's really on screen. */}
+          <video ref={videoRef} className="cam-source" muted playsInline autoPlay />
           <canvas
             ref={canvasRef}
             width={W}
@@ -431,11 +487,25 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
               onEnded={() => audioRef.current?.pause()}
             />
           )}
-          {(state === 'init' || state === 'denied') && (
+          {(state === 'init' || state === 'denied' || state === 'starting') && (
             <div className="vf-overlay">
-              {state === 'denied' && <div className="notice">{error}. Grown-up: allow the camera for this site in Safari settings.</div>}
-              <button className="big-btn primary huge" onClick={openCamera}>
-                🎥 Camera on
+              {state === 'denied' && <div className="notice">{error}</div>}
+              {state === 'starting' ? (
+                <div className="cam-starting">
+                  Starting the camera…
+                  {slow && <small>If nothing happens, tap Allow if the iPad asks, or check Settings → Safari → Camera.</small>}
+                </div>
+              ) : (
+                <button className="big-btn primary huge" onClick={openCamera}>
+                  🎥 Camera on
+                </button>
+              )}
+            </div>
+          )}
+          {needTap && state !== 'review' && (
+            <div className="vf-overlay">
+              <button className="big-btn primary huge" onClick={() => { unlockAudio(); startPicture(); }}>
+                👆 Tap to start the camera
               </button>
             </div>
           )}

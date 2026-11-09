@@ -84,7 +84,8 @@ export async function recentTitles(before, days = 60) {
 
 function secretLine(words, track) {
   if (!words.length) return '';
-  if (track === 'little' || words.length === 1) return `Your secret word is ${words[0]}. Can you say ${words[0]} in your video?`;
+  if (track === 'little') return `Say ${words[0]} in your video!`;
+  if (words.length === 1) return `Your secret word is ${words[0]}. Can you say ${words[0]} in your video?`;
   const list = words.length === 2 ? words.join(' and ') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
   return `Your secret words today are ${list}. Can you say them in your video?`;
 }

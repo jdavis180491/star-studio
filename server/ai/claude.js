@@ -241,8 +241,8 @@ ${remix ? 'This is a REMIX: make it feel different from a normal edit (different
 // ---------------------------------------------------------------- reading: Story Buddy
 
 export const LEVELS = {
-  R: { words: [15, 30], guide: '2-3 very short sentences. Mostly CVC words (cat, sun, hop) and Reception tricky words (the, I, to, go, was).' },
-  Y1: { words: [30, 50], guide: '4-5 short sentences. Simple phonics words with digraphs (sh, ch, ai, ee, igh, oa, oo).' },
+  R: { words: [8, 16], sentences: 2, guide: 'EXACTLY 2 very short sentences. Mostly CVC words (cat, sun, hop) and Reception tricky words (the, I, to, go, was).' },
+  Y1: { words: [10, 20], sentences: 2, guide: 'EXACTLY 2 short sentences. Simple phonics words with digraphs (sh, ch, ai, ee, igh, oa, oo).' },
   Y2: { words: [50, 80], guide: '5-7 sentences. Year 2 common words, some two-syllable words.' },
   Y3: { words: [80, 110], guide: 'Short paragraphs. Mostly familiar words, a few longer words.' },
   Y4: { words: [100, 130], guide: 'Two paragraphs, some dialogue, richer vocabulary.' },
@@ -319,6 +319,8 @@ ${feedback && `Fix these problems from your last attempt:\n${feedback}`}`;
     const tokens = tokenizeBrief(out.text);
     const problems = keywords.filter((k) => !tokens.some((t) => isKeywordForm(normalizeWord(k), t.norm))).map((k) => `Missing keyword "${k}".`);
     if (tokens.length < lo * 0.8 || tokens.length > hi * 1.3) problems.push(`It is ${tokens.length} words; aim for ${lo}-${hi}.`);
+    const sentences = out.text.split(/[.!?]+["'’”)]*\s+|[.!?]+["'’”)]*$/).filter((x) => x.trim()).length;
+    if (level.sentences && sentences !== level.sentences) problems.push(`It has ${sentences} sentences; it must be exactly ${level.sentences}.`);
     last = { ...out, problems };
     if (!problems.length) break;
     feedback = problems.join('\n');
