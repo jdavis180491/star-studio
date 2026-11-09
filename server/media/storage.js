@@ -96,6 +96,11 @@ const cachePath = (key) => path.join(CACHE_DIR, safeKey(key).replace(/\//g, '__'
 
 const inflight = new Map();
 /** Local file path for a stored object (downloaded into a temp cache when needed). */
+/** Put a file we already have into the local cache, so it isn't downloaded again. */
+export async function seedCache(key, file) {
+  await fsp.copyFile(file, cachePath(key));
+}
+
 export async function localCopy(key) {
   const dest = cachePath(key);
   if (fs.existsSync(dest)) return dest;

@@ -330,6 +330,9 @@ export class ElevenLabsRecognizer extends Emitter {
   }
 }
 
+// Remembered for the whole visit: is ElevenLabs listening available? (null = not checked yet)
+let elevenLabsWorks = null;
+
 // Tries ElevenLabs first; if it isn't available, uses the iPad's own recognition.
 class AutoRecognizer extends Emitter {
   constructor({ lang = 'en-GB' } = {}) {
@@ -337,7 +340,7 @@ class AutoRecognizer extends Emitter {
     this.el = ElevenLabsRecognizer.isSupported() ? new ElevenLabsRecognizer() : null;
     this.browser = BrowserRecognizer.isSupported() ? new BrowserRecognizer({ lang }) : null;
     this.active = null;
-    this.useBrowser = !this.el;
+    this.useBrowser = !this.el || elevenLabsWorks === false;
     for (const r of [this.el, this.browser].filter(Boolean)) {
       r.on('transcript', (t) => this.active === r && this.emit('transcript', t));
       r.on('state', (s) => this.active === r && this.emit('state', s));
@@ -364,12 +367,16 @@ class AutoRecognizer extends Emitter {
 
   start() {
     this.wanted = true;
-    if (this.useBrowser || !this.el) return this._startBrowser();
+    if (this.useBrowser || !this.el || elevenLabsWorks === false) return this._startBrowser();
     this.active = this.el;
-    this.emit('state', 'listening'); // show "listening" straight away while connecting
+    // When we know ElevenLabs works, say "listening" straight away: the microphone is recorded
+    // from the first moment and sent once connected, so nothing the child says is lost.
+    if (elevenLabsWorks) this.emit('state', 'listening');
     this.el.start().then((ok) => {
+      if (ok) elevenLabsWorks = true;
       if (!ok && this.wanted && this.active === this.el) {
-        this.useBrowser = true; // don't keep trying this session
+        elevenLabsWorks = false; // remember for the rest of the visit: go straight to the iPad's own
+        this.useBrowser = true;
         this._startBrowser();
       }
     });

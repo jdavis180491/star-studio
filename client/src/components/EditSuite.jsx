@@ -55,9 +55,13 @@ export default function EditSuite({ brief, plan, take, existing, title, track, o
     }
     (async () => {
       try {
-        const { id } = await api.post('/api/kid/videos', { plan, title, track });
+        const { id } = await api.post('/api/kid/videos', { plan, title, track, seconds: take.seconds });
         idRef.current = id;
-        await uploadVideo(`/api/kid/videos/${id}/raw`, take.blob, setProgress);
+        // Once the upload is through, show "Editing" while the server edits (the request stays open).
+        await uploadVideo(`/api/kid/videos/${id}/raw`, take.blob, (p) => {
+          setProgress(p);
+          if (p >= 0.999) setPhase('editing');
+        });
         setPhase('editing');
         watch(id);
       } catch (e) {
@@ -76,10 +80,10 @@ export default function EditSuite({ brief, plan, take, existing, title, track, o
 
   const remix = async () => {
     try {
-      await api.post(`/api/kid/videos/${idRef.current}/remix`);
       setVideo(null);
       setPhase('editing');
       watch(idRef.current);
+      await api.post(`/api/kid/videos/${idRef.current}/remix`); // stays open while the remix is made
     } catch (e) {
       setError(e.message);
     }

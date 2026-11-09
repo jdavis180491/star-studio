@@ -184,7 +184,8 @@ export async function buildEdit({ rawFile, edit, plan, brief, channelName, title
   });
   fc.push(`${v}format=yuv420p,setsar=1[mainv]`);
   // async=1 smooths over gaps in the iPad's recording (they cause clicks and drop-outs).
-  if (hasAudio) fc.push(`[0:a]aresample=44100:async=1:first_pts=0,atrim=0:${seconds.toFixed(2)},asetpts=PTS-STARTPTS,aformat=channel_layouts=stereo,highpass=f=70,volume=1.4,apad=whole_dur=${seconds.toFixed(2)}[maina]`);
+  // The voice is levelled up (quiet children are lifted a lot, loud ones hardly at all) so it's always clear.
+  if (hasAudio) fc.push(`[0:a]aresample=44100:async=1:first_pts=0,atrim=0:${seconds.toFixed(2)},asetpts=PTS-STARTPTS,aformat=channel_layouts=stereo,highpass=f=80,dynaudnorm=f=150:g=11:p=0.95:m=100:r=0.35,acompressor=threshold=0.2:ratio=2.5:attack=5:release=150:makeup=2,apad=whole_dur=${seconds.toFixed(2)}[maina]`);
   else fc.push(`anullsrc=r=44100:cl=stereo,atrim=0:${seconds.toFixed(2)}[maina]`);
   // Cards.
   const silence = (label, d) => fc.push(`anullsrc=r=44100:cl=stereo,atrim=0:${d}[${label}]`);
@@ -198,13 +199,13 @@ export async function buildEdit({ rawFile, edit, plan, brief, channelName, title
   silence('oa', OUTRO);
   const segs = ['[iv][ia]', '[mainv][maina]', ...lyr.map((_, i) => `[lv${i}][la${i}]`), '[ov][oa]'];
   fc.push(`${segs.join('')}concat=n=${segs.length}:v=1:a=1[vout][voice]`);
-  // Music all the way through: softer under the child's clip so their voice is clear, louder on the cards.
+  // Music all the way through: well under the child's (levelled-up) voice during the clip, louder on the cards.
   // (A steady level: automatic ducking made the music pump in and out or vanish.)
   const clipFrom = INTRO.toFixed(2);
   const clipTo = (INTRO + seconds).toFixed(2);
   fc.push(
     `[${musicIdx}:a]atrim=0:${total.toFixed(2)},asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo,` +
-      `volume='if(between(t,${clipFrom},${clipTo}),0.35,0.6)':eval=frame,afade=t=in:d=0.4,afade=t=out:st=${(total - 1).toFixed(2)}:d=1[mus]`
+      `volume='if(between(t,${clipFrom},${clipTo}),0.2,0.6)':eval=frame,afade=t=in:d=0.4,afade=t=out:st=${(total - 1).toFixed(2)}:d=1[mus]`
   );
   fc.push(`[voice][mus]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.9:level=0[aout]`);
 
@@ -228,9 +229,18 @@ export async function buildEdit({ rawFile, edit, plan, brief, channelName, title
 const queue = [];
 let busy = false;
 
+/** Queue a job; resolves when it has finished (whether it worked or not). */
 export function enqueue(job) {
-  queue.push(job);
-  pump();
+  return new Promise((resolve) => {
+    queue.push(async () => {
+      try {
+        await job();
+      } finally {
+        resolve();
+      }
+    });
+    pump();
+  });
 }
 
 async function pump() {
@@ -256,15 +266,31 @@ async function extractAudio(rawFile, workDir) {
   return f;
 }
 
+// The AI edit plan only needs the take's length, so it starts as soon as filming ends,
+// while the video is still uploading. The render picks it up (or plans again if it's off).
+const earlyPlans = new Map(); // videoId -> { seconds, promise }
+export function planEarly(videoId, args) {
+  if (!claudeEnabled() || !(args.seconds > 0)) return;
+  const promise = editPlan({ ...args, transcript: null, remix: false }).catch((e) => {
+    console.warn('Early edit plan fell back:', e.message);
+    return null;
+  });
+  earlyPlans.set(videoId, { seconds: args.seconds, promise });
+  setTimeout(() => earlyPlans.delete(videoId), 10 * 60 * 1000);
+}
+
 /** Full pipeline for one video: transcript → edit plan → render → store. */
 export function renderVideo(videoId, { remix = false } = {}) {
-  enqueue(async () => {
+  return enqueue(async () => {
+    const t0 = Date.now();
+    const lap = (what) => console.log(`🎬 ${videoId} ${what} at ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     const v = await one(`SELECT v.*, k.channel_name FROM videos v JOIN kids k ON k.id = v.kid_id WHERE v.id = $1`, [videoId]);
     if (!v || !v.raw_key) return;
     const workDir = await fsp.mkdtemp(tmpPath('render-'));
     try {
       await q(`UPDATE videos SET status = 'rendering', render_error = NULL WHERE id = $1`, [videoId]);
       const rawFile = await localCopy(v.raw_key);
+      lap('got the take');
       const { seconds, hasAudio } = await probe(rawFile);
 
       // What did they say? (optional Whisper) → keywords said on camera.
@@ -286,7 +312,10 @@ export function renderVideo(videoId, { remix = false } = {}) {
         : v.keywords_said || [];
 
       let edit = null;
-      if (claudeEnabled()) {
+      const early = earlyPlans.get(videoId);
+      earlyPlans.delete(videoId);
+      if (early && !remix && !transcript && Math.abs(early.seconds - seconds) <= 2) edit = await early.promise;
+      if (!edit && claudeEnabled() && !(early && !remix && !transcript)) {
         try {
           edit = await editPlan({ brief: v.brief, plan: v.plan, title: v.title, channelName: v.channel_name, seconds, transcript: timed || transcript, remix });
         } catch (e) {
@@ -294,6 +323,7 @@ export function renderVideo(videoId, { remix = false } = {}) {
         }
       }
       edit = cleanEdit(edit || fallbackEdit(seconds, v.brief, v.plan, remix), seconds, v.brief);
+      lap('edit planned');
 
       const plan = { ...v.plan };
       if (remix) {
@@ -302,6 +332,7 @@ export function renderVideo(videoId, { remix = false } = {}) {
         plan.music = others[Math.floor(Math.random() * others.length)];
       }
       const out = await buildEdit({ rawFile, edit, plan, brief: v.brief, channelName: v.channel_name, title: v.title, workDir });
+      lap('rendered');
       const finalKey = `videos/${v.id}/final-${Date.now()}.mp4`;
       const thumbKey = `videos/${v.id}/thumb-${Date.now()}.jpg`;
       await putFile(finalKey, out.file);
@@ -314,6 +345,7 @@ export function renderVideo(videoId, { remix = false } = {}) {
       );
       if (old?.final_key) await removeFile(old.final_key);
       if (old?.thumb_key) await removeFile(old.thumb_key);
+      lap('ready');
     } catch (e) {
       console.error('Render failed', videoId, e.message);
       await q(`UPDATE videos SET status = 'failed', render_error = $2 WHERE id = $1`, [videoId, String(e.message).slice(0, 500)]);
