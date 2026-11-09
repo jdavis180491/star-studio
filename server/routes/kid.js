@@ -14,8 +14,8 @@ import { premiereState, videoForClient } from '../lib/videos.js';
 import { rateLimit } from '../lib/rateLimit.js';
 import { nextTurn } from '../ai/director.js';
 import { registerLine, lineAudio } from '../ai/voice.js';
-import { putFile, receiveUpload, removeFile } from '../media/storage.js';
-import { renderVideo, renderReel, probe } from '../media/render.js';
+import { putFile, receiveUpload, removeFile, seedCache } from '../media/storage.js';
+import { renderVideo, renderReel, probe, planEarly } from '../media/render.js';
 import { signedUrl } from '../media/signed.js';
 
 const MAX_UPLOAD = 300 * 1024 * 1024;
@@ -145,6 +145,11 @@ export function kidRouter() {
         `INSERT INTO videos (id, kid_id, scope, brief_date, brief, title, plan, status) VALUES ($1,$2,$3,$4,$5,$6,$7,'new')`,
         [id, kid.id, scope, date, { title: brief.title, text: brief.text, keywords: brief.keywords, track }, title, plan]
       );
+      // Start planning the edit now, while the video uploads.
+      const seconds = Number(req.body?.seconds);
+      if (seconds > 0 && seconds <= 70) {
+        planEarly(id, { brief: { title: brief.title, text: brief.text, keywords: brief.keywords, track }, plan, title, channelName: kid.channel_name, seconds });
+      }
       res.json({ id });
     } catch (e) {
       next(e);
@@ -165,9 +170,15 @@ export function kidRouter() {
       if (seconds < 0.5) return res.status(400).json({ error: 'That video looks empty. Try filming again.' });
       const ext = mime.includes('webm') ? 'webm' : 'mp4';
       const key = `videos/${v.id}/raw.${ext}`;
-      await putFile(key, tmp);
+      // The edit starts straight away from the file we just received (no download from storage);
+      // the original is saved to storage at the same time.
+      await seedCache(key, tmp);
+      const saving = putFile(key, tmp);
       await q(`UPDATE videos SET raw_key = $2, raw_mime = $3, status = 'uploaded', seconds = $4 WHERE id = $1`, [v.id, key, mime, Math.round(seconds)]);
-      renderVideo(v.id);
+      // Keep this request open until the edit is done: on Replit Autoscale the server only gets
+      // full computing power while a request is open, so a background edit crawls.
+      await Promise.race([renderVideo(v.id), new Promise((r) => setTimeout(r, 4 * 60 * 1000))]);
+      await saving;
       res.json({ ok: true });
     } catch (e) {
       next(e);
@@ -193,7 +204,7 @@ export function kidRouter() {
       if (v.status !== 'ready') return res.status(409).json({ error: 'The edit is not ready yet' });
       if (v.remixes >= 1) return res.status(409).json({ error: 'You already used your remix' });
       await q(`UPDATE videos SET status = 'rendering' WHERE id = $1`, [v.id]);
-      renderVideo(v.id, { remix: true });
+      await Promise.race([renderVideo(v.id, { remix: true }), new Promise((r) => setTimeout(r, 4 * 60 * 1000))]);
       res.json({ ok: true });
     } catch (e) {
       next(e);

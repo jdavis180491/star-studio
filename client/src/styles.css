@@ -4381,3 +4381,73 @@ a.btn {
 .screen.read {
   scroll-padding-bottom: 160px;
 }
+
+/* Secret words beside the camera picture (on screen only, not in the video) */
+.cam-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.secret-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+}
+.secret-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lime);
+}
+.secret-word {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 900;
+  padding: 6px 14px;
+  border-radius: 12px;
+  background: #ffd23f;
+  color: #111;
+}
+.secret-words.live .secret-word {
+  animation: peek-pulse 1s ease-in-out infinite alternate;
+}
+@media (orientation: landscape) {
+  .cam-stage {
+    flex-direction: row;
+    justify-content: center;
+    align-items: stretch;
+  }
+  .secret-words {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: center;
+    width: 176px;
+    flex: none;
+  }
+  .secret-title {
+    text-align: center;
+  }
+  .secret-word {
+    font-size: 19px;
+    width: 100%;
+    text-align: center;
+    padding: 6px 8px;
+  }
+  /* Leave room for the words beside the picture. */
+  .studio-cam .secret-words ~ .viewfinder {
+    height: min(calc(100dvh - 300px), calc((100vw - 200px) * 9 / 16));
+  }
+  .studio-cam .secret-words ~ .viewfinder.rec,
+  .studio-cam .secret-words ~ .viewfinder.counting {
+    height: min(calc(100dvh - 110px), calc((100vw - 330px) * 9 / 16));
+  }
+}

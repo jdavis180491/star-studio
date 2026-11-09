@@ -387,6 +387,18 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
       </header>
 
       <main className="cam-main">
+        <div className="cam-stage">
+        {state !== 'review' && (brief.keywords || []).length > 0 && (
+          // Their secret words, beside the picture (not recorded into the video).
+          <aside className={`secret-words ${state === 'recording' ? 'live' : ''}`} aria-label="Your secret words">
+            <span className="secret-title">{little ? 'Say it!' : 'Say your secret words!'}</span>
+            {brief.keywords.map((w) => (
+              <span key={w} className="secret-word">
+                {w}
+              </span>
+            ))}
+          </aside>
+        )}
         <div className={`viewfinder ${state === 'recording' ? 'rec' : ''} ${state === 'countdown' || state === 'recap' ? 'counting' : ''}`}>
           <video ref={videoRef} className="hidden-video" muted playsInline />
           <canvas
@@ -442,6 +454,7 @@ export default function StudioCamera({ brief, plan, channelName, little, onBack,
           )}
           {seg === 'loading' && fx.backdrop !== 'none' && <div className="seg-note">Setting up the backdrop…</div>}
           {seg === 'failed' && fx.backdrop !== 'none' && <div className="seg-note">Backdrops need internet. Try again soon!</div>}
+        </div>
         </div>
         {error && state !== 'denied' && <div className="notice">{error}</div>}
       </main>
