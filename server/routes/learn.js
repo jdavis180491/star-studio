@@ -21,7 +21,8 @@ const newId = () => crypto.randomBytes(9).toString('base64url').replace(/[^a-zA-
 // A story or letter must have at least this many words to send (and earn its Dob):
 // 5 for Year 2 and below (by their writing level), 15 for everyone else.
 export const minWritingWords = (kid) => (['R', 'Y1', 'Y2'].includes(levelFor(kid, 'writing')) ? 5 : 15);
-const isYoung = (kid) => kid.track === 'little' || kid.year_group === 'R';
+// Reception and Year 1 (or Star Studio's Young mode): very short, simple reading.
+const isYoung = (kid) => kid.track === 'little' || ['R', 'Y1'].includes(kid.year_group);
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 async function familyOf(kid) {
@@ -464,7 +465,7 @@ function offlineStory(ideas, keywords, young) {
   const problem = ideas.problem || 'the lights went out';
   const kw = keywords.length ? keywords : ['fun'];
   const text = young
-    ? `${cap(hero)} was in ${place}. Then ${problem}! It was a ${kw[0]} day.`
+    ? `${cap(hero)} was in ${place} with a ${kw[0]}. Then ${problem}!`
     : `Once upon a time, ${hero} lived in ${place}. Every day was quiet, until one morning ${problem}. ` +
       `"Oh no!" said ${hero}. "This is a ${kw[0]} problem!" ` +
       `So ${hero} made a plan${kw[1] ? ` with a ${kw[1]}` : ''}. It was tricky and very silly, but it worked. ` +

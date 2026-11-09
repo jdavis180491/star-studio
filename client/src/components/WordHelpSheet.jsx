@@ -1,52 +1,34 @@
-import React, { useState } from 'react';
-import { chunkWord, speakableChunk } from '../reading/phonics.js';
+import React, { useEffect, useState } from 'react';
 import { say, primeDirectorAudio } from '../speech/say.js';
 
-export default function WordHelpSheet({ token, overrides, paid, onHelp, onClose }) {
+// Word help: opens only when the child taps a word. It says the whole word clearly
+// (no sounding-out: single sounds come out odd), and they can hear it again.
+export default function WordHelpSheet({ token, onHelp, onClose }) {
   const word = token.display.replace(/[^A-Za-z0-9'’-]/g, '').replace(/-$/, '');
-  const chunks = chunkWord(token.norm, overrides);
-  const [revealed, setRevealed] = useState(paid);
-  const [active, setActive] = useState(-1);
+  const [speaking, setSpeaking] = useState(false);
 
-  // Each sound, then the whole word, in the app's voice; the matching chunk lights up.
-  const play = async () => {
+  const hear = async () => {
     primeDirectorAudio();
-    await say([...chunks.map(speakableChunk), token.norm], { onLine: (i) => setActive(i) });
-    setActive(-1);
+    setSpeaking(true);
+    await say(word);
+    setSpeaking(false);
   };
 
-  const help = () => {
-    onHelp(token.norm);
-    setRevealed(true);
-    play();
-  };
+  useEffect(() => {
+    onHelp?.(token.norm);
+    hear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Help with ${word}`}>
-        <div className="sheet-kicker">WORD ASSIST</div>
-        <div className="sheet-word">
-          {revealed ? (
-            chunks.map((c, i) => (
-              <span key={i} className={`chunk c${i % 4} ${active === i || active === chunks.length ? 'say' : ''}`}>
-                {c}
-              </span>
-            ))
-          ) : (
-            <span>{word}</span>
-          )}
-        </div>
-
+        <div className="sheet-kicker">WORD HELP</div>
+        <div className={`sheet-word ${speaking ? 'speaking' : ''}`}>{word}</div>
         <div className="sheet-actions">
-          {!revealed ? (
-            <button className="big-btn pink" onClick={help}>
-              Break it down
-            </button>
-          ) : (
-            <button className="big-btn pink" onClick={play}>
-              🔊 Replay
-            </button>
-          )}
+          <button className="big-btn pink" onClick={hear}>
+            🔊 Hear it again
+          </button>
           <button className="big-btn ghost" onClick={onClose}>
             Got it
           </button>

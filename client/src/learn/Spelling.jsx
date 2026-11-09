@@ -119,7 +119,7 @@ export default function Spelling({ kid, onBack, onKid }) {
     setLocked(cur);
     setHints((h) => h + 1);
     setAnswer('');
-    sayAloud([...(item.chunks || []), item.word]);
+    sayAloud(item.word); // the whole word (single sounds come out odd)
     if (cur.every(Boolean)) {
       setFeedback('shown');
       return;

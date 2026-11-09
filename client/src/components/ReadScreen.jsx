@@ -130,15 +130,15 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
     };
   }, [tracker, celebrateWords]);
 
-  // Three tries and the word still isn't heard: word help pops up to sound it out (and then it counts).
-  const helped = useRef(new Set());
+  // Three tries and the word still isn't heard: a gentle reminder that they can tap it for help
+  // (word help never pops up by itself: that would break their flow).
+  const hinted = useRef(new Set());
   useEffect(() => {
     const i = snap.needsHelp;
-    if (i == null || helped.current.has(i) || helpIndex != null) return;
-    helped.current.add(i);
-    shout('Let’s sound it out!');
-    openHelp(i); // eslint-disable-line no-use-before-define
-  }, [snap.needsHelp]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (i == null || hinted.current.has(i)) return;
+    hinted.current.add(i);
+    shout('Stuck? Tap the word to hear it');
+  }, [snap.needsHelp, shout]);
 
   // Keep the word they're on (or the sentence they're repeating) in view, above the controls.
   const followIndex = echo && echoPhase !== 'start' && echoPhase !== 'done' ? sentences[echoAt]?.[0] : snap.stuck ?? snap.nextIndex;
@@ -205,6 +205,7 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
 
   const openHelp = (i) => {
     unlockAudio();
+    primeDirectorAudio(); // the tap lets word help speak straight away
     pauseForSheet();
     setHelpIndex(i);
   };
@@ -538,8 +539,6 @@ export default function ReadScreen({ brief, coins = 0, onBack, onUnlocked, mode 
       {helpIndex != null && (
         <WordHelpSheet
           token={tracker.tokens[helpIndex]}
-          overrides={brief.chunks}
-          paid={paidWords.has(tracker.tokens[helpIndex].norm)}
           onHelp={markHelped}
           onClose={() => {
             setHelpIndex(null);
