@@ -4489,3 +4489,29 @@ a.btn {
   transform: scale(1.04);
   transition: transform 0.2s, color 0.2s;
 }
+
+/* Grown-ups: camera check */
+.camcheck {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.camcheck li {
+  line-height: 1.4;
+}
+.camcheck-video {
+  width: 200px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 14px;
+  margin-top: 12px;
+  background: #000;
+  transform: scaleX(-1);
+}
+.notice.ok {
+  border-color: var(--lime);
+  color: var(--lime);
+}

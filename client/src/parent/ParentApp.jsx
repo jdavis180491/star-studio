@@ -7,6 +7,7 @@ import { playLines, primeDirectorAudio } from '../speech/directorVoice.js';
 import { unlockAudio } from '../sfx.js';
 import { PrivacySheet } from './Privacy.jsx';
 import NotificationsCard from './Notifications.jsx';
+import CameraCheck from './CameraCheck.jsx';
 import { Keywords, AdminBriefs } from './Words.jsx';
 
 const TABS = [
@@ -768,6 +769,7 @@ function Settings({ status }) {
 
   return (
     <section>
+      <CameraCheck />
       <ListeningCard status={status} />
       <NotificationsCard />
       <div className="p-card">
