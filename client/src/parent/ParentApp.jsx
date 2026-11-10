@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import Video from '../components/Video.jsx';
 import { api } from '../api.js';
 import { DobsLogo as Logo, DobIcon } from '../components/Dob.jsx';
 import Avatar from '../components/Avatar.jsx';
@@ -507,7 +508,7 @@ function Approvals({ onChange }) {
             </h2>
             <span className={`badge ${v.status}`}>{label[v.status] || v.status}</span>
           </div>
-          {v.finalUrl && <video className="p-video" src={v.finalUrl} poster={v.thumbUrl} controls playsInline preload="none" />}
+          {v.finalUrl && <Video className="p-video" src={v.finalUrl} poster={v.thumbUrl} />}
           <div className="p-actions">
             {v.status === 'submitted' && (
               <>

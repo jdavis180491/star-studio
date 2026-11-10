@@ -42,6 +42,8 @@ export async function canView(session, video) {
   return (await premiereState(video.scope, video.brief_date)).revealed;
 }
 
+const LINK_TTL = 6 * 60 * 60;
+
 export function videoForClient(v, { owner = false } = {}) {
   const out = {
     id: v.id,
@@ -52,12 +54,13 @@ export function videoForClient(v, { owner = false } = {}) {
     status: v.status,
     seconds: v.seconds,
     viral: v.viral,
-    finalUrl: v.final_key ? signedUrl('final', v.id) : null,
-    thumbUrl: v.thumb_key ? signedUrl('thumb', v.id) : null,
+    // Links last 6 hours, so a channel left open on the iPad still plays later.
+    finalUrl: v.final_key ? signedUrl('final', v.id, LINK_TTL) : null,
+    thumbUrl: v.thumb_key ? signedUrl('thumb', v.id, LINK_TTL) : null,
   };
   if (owner) {
     Object.assign(out, {
-      rawUrl: v.raw_key ? signedUrl('raw', v.id) : null,
+      rawUrl: v.raw_key ? signedUrl('raw', v.id, LINK_TTL) : null,
       plan: v.plan,
       edit: v.edit,
       remixesLeft: Math.max(0, 1 - v.remixes),

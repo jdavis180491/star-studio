@@ -223,3 +223,12 @@ test('"the" never swallows a word that only sounds a bit like it ("tooth")', () 
   assert.ok(t.snapshot().unlocked);
   assert.equal(t.snapshot().stuck, null);
 });
+
+test('a forgiving match never accepts a word that is really one further on ("your" is not "young")', () => {
+  const t = new ReadingTracker('You are a young wizard learning your first spell.', []);
+  t.ingest('s', 'You are a wizard learning your');
+  const s = t.snapshot();
+  assert.equal(s.status[3], 'unread', '"young" was skipped');
+  assert.equal(t.tokens[s.nextIndex].norm, 'young');
+  assert.equal(s.stuck, 3);
+});
