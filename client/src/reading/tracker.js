@@ -160,8 +160,10 @@ export class ReadingTracker {
       // After word help on this word, any close try at saying it counts.
       if (j === this.helpedAt && closeTry(T[j].norm, w[k])) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
       // ("a", "an", "the" only ever match themselves: "the" must not swallow "tooth".)
-      if (T[j].filler ? wordsMatch(T[j].norm, w[k], { strict: true }) : wordsMatch(T[j].norm, w[k], { loose: T[j].norm.length >= 4 }))
-        return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
+      // A forgiving (not exact) match never counts if the word is exactly one further on: that's a skip.
+      const exact = wordsMatch(T[j].norm, w[k], T[j].filler ? { strict: true } : {});
+      const forgiving = !exact && !T[j].filler && T[j].norm.length >= 4 && wordsMatch(T[j].norm, w[k], { loose: true }) && !this._exactlyAhead(w[k], j);
+      if (exact || forgiving) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
       // Speech engine split one word in two ("sud den lee" for "suddenly")…
       if (k + 1 < w.length && wordsMatch(T[j].norm, w[k] + w[k + 1], { strict: true })) {
         return { read: [j], filled: [...filled], next: j + 1, consumed: 2 };
@@ -182,6 +184,14 @@ export class ReadingTracker {
     const T = this.tokens;
     for (let j = cursor + 1; j < T.length; j++) {
       if (!T[j].filler && this.status[j] === 'unread' && wordsMatch(T[j].norm, word)) return true;
+    }
+    return false;
+  }
+
+  _exactlyAhead(word, j) {
+    const T = this.tokens;
+    for (let i = j + 1; i < Math.min(T.length, j + 1 + LOOKAHEAD); i++) {
+      if (this.status[i] === 'unread' && wordsMatch(T[i].norm, word, T[i].filler ? { strict: true } : {})) return true;
     }
     return false;
   }

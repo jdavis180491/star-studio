@@ -215,7 +215,7 @@ export async function buildEdit({ rawFile, edit, plan, brief, channelName, title
     '-filter_complex', fc.join(';'),
     '-map', '[vout]', '-map', '[aout]',
     '-t', total.toFixed(2),
-    '-c:v', 'libx264', '-preset', process.env.RENDER_PRESET || 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
+    '-c:v', 'libx264', '-preset', process.env.RENDER_PRESET || 'superfast', '-crf', '24', '-maxrate', '3M', '-bufsize', '6M', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
     out,
   ]);
@@ -280,7 +280,7 @@ export function planEarly(videoId, args) {
 }
 
 /** Full pipeline for one video: transcript → edit plan → render → store. */
-export function renderVideo(videoId, { remix = false } = {}) {
+export function renderVideo(videoId, { remix = false, repair = false } = {}) {
   return enqueue(async () => {
     const t0 = Date.now();
     const lap = (what) => console.log(`🎬 ${videoId} ${what} at ${((Date.now() - t0) / 1000).toFixed(1)}s`);
@@ -288,7 +288,8 @@ export function renderVideo(videoId, { remix = false } = {}) {
     if (!v || !v.raw_key) return;
     const workDir = await fsp.mkdtemp(tmpPath('render-'));
     try {
-      await q(`UPDATE videos SET status = 'rendering', render_error = NULL WHERE id = $1`, [videoId]);
+      // repair = the finished file went missing: rebuild it quietly from the original, same edit, same status.
+      if (!repair) await q(`UPDATE videos SET status = 'rendering', render_error = NULL WHERE id = $1`, [videoId]);
       const rawFile = await localCopy(v.raw_key);
       lap('got the take');
       const { seconds, hasAudio } = await probe(rawFile);
@@ -315,6 +316,7 @@ export function renderVideo(videoId, { remix = false } = {}) {
       const early = earlyPlans.get(videoId);
       earlyPlans.delete(videoId);
       if (early && !remix && !transcript && Math.abs(early.seconds - seconds) <= 2) edit = await early.promise;
+      if (repair && v.edit) edit = v.edit;
       if (!edit && claudeEnabled() && !(early && !remix && !transcript)) {
         try {
           edit = await editPlan({ brief: v.brief, plan: v.plan, title: v.title, channelName: v.channel_name, seconds, transcript: timed || transcript, remix });
@@ -338,6 +340,11 @@ export function renderVideo(videoId, { remix = false } = {}) {
       await putFile(finalKey, out.file);
       await putFile(thumbKey, out.thumb);
       const old = await one(`SELECT final_key, thumb_key FROM videos WHERE id = $1`, [videoId]);
+      if (repair) {
+        await q(`UPDATE videos SET final_key = $2, thumb_key = $3 WHERE id = $1`, [videoId, finalKey, thumbKey]);
+        console.log(`🩹 ${videoId} finished video rebuilt from the original`);
+        return;
+      }
       await q(
         `UPDATE videos SET status = 'ready', final_key = $2, thumb_key = $3, edit = $4, plan = $5, seconds = $6,
            transcript = $7, keywords_said = $8, remixes = remixes + $9 WHERE id = $1`,
@@ -348,6 +355,7 @@ export function renderVideo(videoId, { remix = false } = {}) {
       lap('ready');
     } catch (e) {
       console.error('Render failed', videoId, e.message);
+      if (repair) return;
       await q(`UPDATE videos SET status = 'failed', render_error = $2 WHERE id = $1`, [videoId, String(e.message).slice(0, 500)]);
     } finally {
       await fsp.rm(workDir, { recursive: true, force: true });

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import Video from './Video.jsx';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
 
@@ -74,7 +75,7 @@ export default function CrewTab({ kid }) {
             </div>
             {f.video ? (
               <>
-                <video className="feed-video" src={f.video.finalUrl} poster={f.video.thumbUrl} controls playsInline preload="none" />
+                <Video className="feed-video" src={f.video.finalUrl} poster={f.video.thumbUrl} />
                 <div className="feed-title">
                   {f.video.title}
                   {f.video.viral && <span className="trend">🔥 TRENDING</span>}

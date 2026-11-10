@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Video from './Video.jsx';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
 import { coin, wrong } from '../sfx.js';
@@ -224,7 +225,7 @@ export function ChannelTab({ kid }) {
       <div className="video-grid">
         {data.videos.map((v) => (
           <div key={v.id} className="video-card">
-            {v.finalUrl ? <video src={v.finalUrl} poster={v.thumbUrl} controls playsInline preload="none" /> : <div className="video-ph">🎬</div>}
+            {v.finalUrl ? <Video src={v.finalUrl} poster={v.thumbUrl} /> : <div className="video-ph">🎬</div>}
             <div className="video-meta">
               <b>{v.title}</b>
               <span className={`badge ${v.status}`}>{label[v.status] || v.status}</span>

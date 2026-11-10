@@ -5,6 +5,9 @@ import { one } from '../db.js';
 import { verifySigned } from '../media/signed.js';
 import { localCopy } from '../media/storage.js';
 import { canView } from '../lib/videos.js';
+import { renderVideo } from '../media/render.js';
+
+const repairing = new Set();
 
 const TYPES = { raw: null, final: 'video/mp4', thumb: 'image/jpeg', reel: 'video/mp4' };
 
@@ -39,7 +42,19 @@ export function mediaRouter() {
         key = { raw: v.raw_key, final: v.final_key, thumb: v.thumb_key }[kind];
       }
       if (!key) return res.status(404).end();
-      const file = await localCopy(key);
+      let file;
+      try {
+        file = await localCopy(key);
+      } catch (e) {
+        // The file has gone missing from storage. If it's a finished video (or its picture) and the
+        // original take is still there, rebuild it quietly; the app tries again in a moment.
+        console.warn(`📦 ${kind} for ${id} is missing (${e.message})`);
+        if ((kind === 'final' || kind === 'thumb') && id && !repairing.has(id)) {
+          repairing.add(id);
+          renderVideo(id, { repair: true }).finally(() => setTimeout(() => repairing.delete(id), 60000));
+        }
+        return res.status(404).json({ error: 'Video is being fixed. Try again in a minute.' });
+      }
       res.set({ 'Cache-Control': 'private, max-age=600', 'Content-Type': type });
       res.sendFile(file, { acceptRanges: true }); // Range support: Safari needs it to play video
     } catch (e) {

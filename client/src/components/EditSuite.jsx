@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Video from './Video.jsx';
 import { api, uploadVideo } from '../api.js';
 import { greenlight, coin } from '../sfx.js';
 
@@ -126,7 +127,7 @@ export default function EditSuite({ brief, plan, take, existing, title, track, o
         {(phase === 'ready' || phase === 'posting') && video && (
           <>
             <div className="gl-kicker">{(video.title || brief.title).toUpperCase()}</div>
-            <video className="final-video" src={video.finalUrl} poster={video.thumbUrl} controls playsInline autoPlay />
+            <Video className="final-video" src={video.finalUrl} poster={video.thumbUrl} autoPlay preload="auto" />
             {error && <div className="notice">{error}</div>}
             <div className="row-btns">
               {video.remixesLeft > 0 && (
