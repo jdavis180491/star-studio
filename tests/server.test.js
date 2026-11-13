@@ -44,6 +44,12 @@ test('trophies at 50 / 250 / 1,000 Dobs earned', () => {
   assert.deepEqual(trophiesFor(1200), ['rising', 'hitmaker', 'mega']);
 });
 
+test('login picture: unicorn allowed, junk ignored', () => {
+  assert.equal(cleanAvatar({ icon: 'unicorn' }).icon, 'unicorn');
+  assert.equal(cleanAvatar({ icon: '<script>' }).icon, 'face');
+  assert.equal(cleanAvatar({}).icon, 'face');
+});
+
 test('avatars only wear owned items', () => {
   const a = cleanAvatar({ hat: 'crown', glasses: 'shades', hair: 'curly', skin: 'nope' }, ['glasses-shades']);
   assert.equal(a.hat, null);

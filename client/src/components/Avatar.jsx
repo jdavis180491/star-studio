@@ -4,6 +4,11 @@ import React from 'react';
 const SKIN = { s1: '#ffe0c7', s2: '#f6c79f', s3: '#e0a878', s4: '#c08457', s5: '#8d5a3b', s6: '#5c3a24' };
 const HAIR = { black: '#1c1a22', brown: '#5a3820', blonde: '#e8c26a', ginger: '#c9562a', blue: '#3d7bff', pink: '#ff4f9a' };
 const TOP = { pink: '#ff2e63', lime: '#9fdc1f', cyan: '#18b6d6', orange: '#ff8a00', purple: '#7a3cff', black: '#24242e' };
+// Picture options for the login screen (the stored value is the name, not the emoji).
+export const ICONS = {
+  unicorn: '🦄', dragon: '🐉', dino: '🦖', cat: '🐱', dog: '🐶', fox: '🦊', panda: '🐼', bunny: '🐰',
+  dolphin: '🐬', butterfly: '🦋', rocket: '🚀', star: '🌟', rainbow: '🌈', football: '⚽',
+};
 const BG = {
   sunset: ['#ff8a00', '#ff2e63'],
   ocean: ['#3de1ff', '#2a5bff'],
@@ -30,6 +35,11 @@ export default function Avatar({ avatar = {}, size = 96, ring = false }) {
         </clipPath>
       </defs>
       <circle cx="60" cy="60" r="58" fill={`url(#${id})`} />
+      {ICONS[a.icon] ? (
+        <text x="60" y="64" textAnchor="middle" dominantBaseline="middle" fontSize="70">
+          {ICONS[a.icon]}
+        </text>
+      ) : (
       <g clipPath={`url(#${id}c)`}>
         {/* body / outfit */}
         {a.top === 'jacket' && <path d="M18 120c2-24 18-34 42-34s40 10 42 34z" fill="#1d1d26" />}
@@ -112,6 +122,7 @@ export default function Avatar({ avatar = {}, size = 96, ring = false }) {
         )}
         {a.hat === 'crown' && <path d="M38 36l4-18 10 10 8-14 8 14 10-10 4 18z" fill="#ffd400" stroke="#c99a00" strokeWidth="2" />}
       </g>
+      )}
     </svg>
   );
 }
