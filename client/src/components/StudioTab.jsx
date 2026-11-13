@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Video from './Video.jsx';
 import { api } from '../api.js';
-import Avatar from './Avatar.jsx';
+import Avatar, { ICONS } from './Avatar.jsx';
 import { coin, wrong } from '../sfx.js';
 import { DobIcon } from './Dob.jsx';
 
@@ -153,13 +153,23 @@ export default function StudioTab({ kid, onKid }) {
       {mode === 'look' && (
         <div className="look-editor">
           <Avatar avatar={avatar} size={180} ring />
+          <div className="look-row">
+            <span className="look-label">My picture (shows when you log in)</span>
+            <div className="look-opts">
+              {['face', ...Object.keys(ICONS)].map((o) => (
+                <button key={o} className={`look-opt ${(avatar.icon || 'face') === o ? 'on' : ''}`} aria-label={o === 'face' ? 'My character' : o} onClick={() => saveAvatar({ icon: o })}>
+                  <Avatar avatar={{ ...avatar, icon: o }} size={54} />
+                </button>
+              ))}
+            </div>
+          </div>
           {Object.entries(OPTIONS).map(([key, opts]) => (
             <div key={key} className="look-row">
               <span className="look-label">{LABELS[key]}</span>
               <div className="look-opts">
                 {opts.map((o) => (
                   <button key={o} className={`look-opt ${avatar[key] === o ? 'on' : ''}`} onClick={() => saveAvatar({ [key]: o })}>
-                    <Avatar avatar={{ ...avatar, [key]: o }} size={54} />
+                    <Avatar avatar={{ ...avatar, icon: 'face', [key]: o }} size={54} />
                   </button>
                 ))}
               </div>

@@ -10,6 +10,7 @@ export const AVATAR_DEFAULT = {
   hat: null,
   glasses: null,
   bg: 'sunset',
+  icon: 'face',
 };
 
 // Free choices.
@@ -20,6 +21,8 @@ export const AVATAR_OPTIONS = {
   eyes: ['happy', 'wide', 'wink'],
   topColor: ['pink', 'lime', 'cyan', 'orange', 'purple', 'black'],
   bg: ['sunset', 'ocean', 'galaxy', 'lime'],
+  // Login picture: 'face' shows the dressed-up character, anything else a big picture instead.
+  icon: ['face', 'unicorn', 'dragon', 'dino', 'cat', 'dog', 'fox', 'panda', 'bunny', 'dolphin', 'butterfly', 'rocket', 'star', 'rainbow', 'football'],
 };
 
 // Paid items. type decides which avatar slot (or the studio) they go in.
