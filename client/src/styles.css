@@ -4535,3 +4535,97 @@ a.btn {
   background: rgba(10, 10, 16, 0.85);
   border-radius: inherit;
 }
+
+/* ---------- The app's own keyboard (Writing + Spelling): no iPad keyboard, so no dictation ---------- */
+.kid-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+.kk-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.kk-key {
+  flex: 1 1 0;
+  max-width: 76px;
+  min-height: clamp(46px, 6.4vh, 64px);
+  font: inherit;
+  font-size: clamp(20px, 2.8vw, 28px);
+  font-weight: 800;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+  -webkit-tap-highlight-color: transparent;
+}
+.kk-key:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.2);
+}
+.kk-key:disabled {
+  opacity: 0.4;
+}
+.kk-key.wide {
+  flex: 1.5 1 0;
+  max-width: 114px;
+  font-size: clamp(16px, 2.2vw, 22px);
+}
+.kk-key.on {
+  background: var(--orange);
+  color: #fff;
+}
+.kk-key.back {
+  background: rgba(255, 107, 107, 0.2);
+}
+.kk-key.space {
+  flex: 5 1 0;
+  max-width: 420px;
+  font-size: 18px;
+  color: var(--muted);
+}
+.kid-keyboard.spelling .kk-key {
+  min-height: clamp(54px, 7.5vh, 72px);
+}
+.typed {
+  cursor: default;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.write-box.typed {
+  min-height: 150px;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+.spell-input.typed {
+  min-height: 1.6em;
+}
+.typed-placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+.typed .caret {
+  display: inline-block;
+  width: 3px;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--orange);
+  border-radius: 2px;
+  animation: caret-blink 1s steps(1) infinite;
+}
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}

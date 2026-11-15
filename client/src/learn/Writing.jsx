@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import KidKeyboard, { applyKey } from '../components/KidKeyboard.jsx';
 import { api } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 import { DobReward } from '../components/Dob.jsx';
@@ -266,20 +267,11 @@ function Compose({ kid, thread, onBack, onSent }) {
           })}
         </div>
       ) : (
-        <textarea
-          className="write-box"
-          value={text}
-          placeholder="Once upon a time…"
-          onChange={(e) => {
-            setText(e.target.value);
-            setIssues(null);
-            setNote(null);
-          }}
-          autoCapitalize="sentences"
-          spellCheck={false}
-          autoCorrect="off"
-          autoFocus
-        />
+        <div className="write-box typed" aria-label="Your writing" aria-live="polite">
+          {!text && <span className="caret" aria-hidden />}
+          {text ? <span className="typed-text">{text}</span> : <span className="typed-placeholder">Once upon a time…</span>}
+          {text && <span className="caret" aria-hidden />}
+        </div>
       )}
       <div className="write-meta">
         <span className={enough ? 'saved' : ''}>
@@ -306,6 +298,16 @@ function Compose({ kid, thread, onBack, onSent }) {
           </button>
         )}
       </div>
+      <KidKeyboard
+        mode="writing"
+        text={text}
+        disabled={Boolean(open) || sending}
+        onKey={(k) => {
+          setText((t) => applyKey(t, k).slice(0, 5000));
+          setIssues(null);
+          setNote(null);
+        }}
+      />
       {open && <FixSheet issue={open} context={text} onFix={fix} onClose={() => setOpen(null)} />}
     </main>
   );
