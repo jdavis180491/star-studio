@@ -1,6 +1,7 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { DobReward } from '../components/Dob.jsx';
+import KidKeyboard, { applyKey } from '../components/KidKeyboard.jsx';
 import { SectionHeader, ProgressDots } from './common.jsx';
 import { playLines, primeDirectorAudio, stopDirector } from '../speech/directorVoice.js';
 import { unlockAudio, keywordHit, wrong } from '../sfx.js';
@@ -23,7 +24,6 @@ export default function Spelling({ kid, onBack, onKid }) {
   const [hints, setHints] = useState(0);
   const [reward, setReward] = useState(null);
   const [error, setError] = useState(null);
-  const inputRef = useRef(null);
   const little = kid.track === 'little';
 
   const item = set?.items[i];
@@ -81,7 +81,6 @@ export default function Spelling({ kid, onBack, onKid }) {
     setHints(0);
     setTimeout(() => {
       say(set.items[n]);
-      inputRef.current?.focus();
     }, 250);
   };
 
@@ -105,7 +104,6 @@ export default function Spelling({ kid, onBack, onKid }) {
       setTries((t) => t + 1);
       setFeedback('wrong');
       setAnswer('');
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
 
@@ -125,7 +123,6 @@ export default function Spelling({ kid, onBack, onKid }) {
       return;
     }
     setFeedback(null);
-    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const giveUp = () => {
@@ -182,24 +179,15 @@ export default function Spelling({ kid, onBack, onKid }) {
         ) : (
           <>
           {slotMode && <Slots word={word} locked={locked} value={answer} right={feedback === 'right'} />}
-          <input
-            ref={inputRef}
-            className={`spell-input ${feedback === 'right' ? 'right' : ''} ${feedback === 'wrong' ? 'shake' : ''}`}
-            value={answer}
-            onChange={(e) => {
-              const v = e.target.value.replace(/[^A-Za-z'’-]/g, '').toLowerCase();
-              setAnswer(slotMode ? v.slice(0, open) : v);
-              if (feedback === 'wrong') setFeedback(null);
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && check()}
-            autoCapitalize="none"
-            autoCorrect="off"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={slotMode ? 'Missing letters' : 'Type it here'}
-            readOnly={feedback === 'right' || feedback === 'shown'}
-            autoFocus
-          />
+          <div
+            className={`spell-input typed ${feedback === 'right' ? 'right' : ''} ${feedback === 'wrong' ? 'shake' : ''}`}
+            aria-label="Your spelling"
+            aria-live="polite"
+          >
+            {!answer && <span className="caret" aria-hidden />}
+            {answer ? <span className="typed-text">{answer}</span> : <span className="typed-placeholder">{slotMode ? 'Missing letters' : 'Type it here'}</span>}
+            {answer && feedback !== 'right' && feedback !== 'shown' && <span className="caret" aria-hidden />}
+          </div>
           </>
         )}
         <div className="spell-msg">
@@ -234,6 +222,21 @@ export default function Spelling({ kid, onBack, onKid }) {
           )}
         </div>
         {error && <div className="notice">{error}</div>}
+        {!little && (
+          <KidKeyboard
+            mode="spelling"
+            disabled={feedback === 'right' || feedback === 'shown'}
+            enterDisabled={!answer}
+            onEnter={check}
+            onKey={(k) => {
+              setAnswer((v) => {
+                const n = applyKey(v, k).replace(/[^a-z'’-]/g, '');
+                return slotMode ? n.slice(0, open) : n.slice(0, 30);
+              });
+              if (feedback === 'wrong') setFeedback(null);
+            }}
+          />
+        )}
       </main>
     );
   }
