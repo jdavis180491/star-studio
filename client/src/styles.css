@@ -4629,3 +4629,32 @@ a.btn {
     opacity: 0;
   }
 }
+
+/* ---------- Crew: watch earlier days ---------- */
+.day-picker {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.day-picker::-webkit-scrollbar {
+  display: none;
+}
+.day-chip {
+  flex: 0 0 auto;
+  font: inherit;
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 18px;
+}
+.day-chip.on {
+  background: var(--lime);
+  border-color: var(--lime);
+  color: #14141e;
+}

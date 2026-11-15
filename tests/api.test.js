@@ -232,6 +232,31 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal((await B.post('/api/kid/award', { videoId: vidB, award: 'funniest' })).status, 400);
   assert.equal((await B.post('/api/kid/award', { videoId: vid, award: 'funniest' })).status, 200);
   assert.equal((await B.post('/api/kid/award', { videoId: vid, award: 'dance' })).status, 409);
+
+  // Earlier days: crew-mates can go back and watch them (copy A's video to 3 days ago).
+  {
+    const pg = (await import('pg')).default;
+    const db = new pg.Client({ connectionString: url });
+    await db.connect();
+    const today = (await B.get('/api/kid/crew')).data.today;
+    const past = new Date(Date.parse(`${today}T12:00:00Z`) - 3 * 86400000).toISOString().slice(0, 10);
+    const cols = (await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'videos' AND column_name NOT IN ('id','brief_date')`)).rows.map((r) => r.column_name).join(', ');
+    await db.query(`INSERT INTO videos (id, brief_date, ${cols}) SELECT 'old-' || id, $2::date, ${cols} FROM videos WHERE id = $1`, [vid, past]);
+    const crewNow = (await B.get('/api/kid/crew')).data;
+    assert.ok(crewNow.days.includes(past), 'the day picker lists earlier days with videos');
+    assert.equal(crewNow.days[0], today);
+    const old = (await B.get(`/api/kid/crew?date=${past}`)).data;
+    assert.equal(old.date, past);
+    assert.equal(old.revealed, true, 'earlier days are always premiered');
+    assert.deepEqual(old.feed.map((f) => f.kid.id), [kidA.id], 'only who posted that day');
+    assert.equal(old.feed[0].video.id, `old-${vid}`);
+    assert.equal((await B.get(old.feed[0].video.finalUrl)).status, 200, 'crew-mate can watch an earlier day');
+    assert.equal((await B.post('/api/kid/award', { videoId: `old-${vid}`, award: 'dance' })).status, 409, 'awards are for today only');
+    assert.equal((await B.get('/api/kid/crew?date=2999-01-01')).data.date, today, 'no peeking at the future');
+    assert.equal((await B.get('/api/kid/crew?date=nonsense')).data.date, today);
+    await db.query(`DELETE FROM videos WHERE id = $1`, [`old-${vid}`]);
+    await db.end();
+  }
   assert.equal((await B.get('/api/kid/crew')).data.league, undefined, 'no separate Star Studio league any more');
   const board = (await B.get('/api/kid/leaderboard')).data.rows;
   assert.equal(board.length, 2);

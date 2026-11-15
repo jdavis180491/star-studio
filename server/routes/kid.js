@@ -300,14 +300,25 @@ export function kidRouter() {
       const scope = await scopeForKid(kid);
       const crew = await crewForKid(kid.id);
       const members = await scopeMembers(scope);
-      const date = String(req.query.date || dayISO());
+      const today = dayISO();
+      // Any earlier day can be picked (never the future); past days are always premiered.
+      const asked = String(req.query.date || '');
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= today ? asked : today;
+      const isToday = date === today;
       const state = await premiereState(scope, date);
       const vids = await many(`SELECT * FROM videos WHERE scope = $1 AND brief_date = $2 AND status IN ('submitted','approved')`, [scope, date]);
+      // Days with videos to watch, newest first (for the day picker).
+      const dayRows = await many(
+        `SELECT DISTINCT brief_date::text AS d FROM videos WHERE scope = $1 AND status = 'approved' AND brief_date < $2 ORDER BY d DESC LIMIT 60`,
+        [scope, today]
+      );
       const reactions = vids.length
         ? await many(`SELECT video_id, sticker, kid_id FROM reactions WHERE video_id = ANY($1)`, [vids.map((v) => v.id)])
         : [];
       const awards = await many(`SELECT * FROM awards WHERE scope = $1 AND award_date = $2`, [scope, date]);
-      const feed = members.map((m) => {
+      // Today: everyone in the crew (posted or not). Earlier days: whoever posted that day.
+      const people = isToday ? members : members.filter((m) => vids.some((v) => v.kid_id === m.id && v.status === 'approved'));
+      const feed = people.map((m) => {
         const v = vids.find((x) => x.kid_id === m.id);
         const visible = v && v.status === 'approved' && (state.revealed || m.id === kid.id);
         return {
@@ -326,6 +337,8 @@ export function kidRouter() {
       const reel = crew ? await one(`SELECT * FROM reels WHERE scope = $1 AND week_start = $2`, [scope, week]) : null;
       res.json({
         date,
+        today,
+        days: [today, ...dayRows.map((r) => r.d)],
         crew: crew ? { id: crew.id, name: crew.name } : null,
         revealed: state.revealed,
         revealReason: state.reason,
@@ -370,6 +383,7 @@ export function kidRouter() {
       const v = await one(`SELECT * FROM videos WHERE id = $1 AND status = 'approved' AND scope = $2`, [videoId, scope]);
       if (!v) return res.status(404).json({ error: 'Video not found' });
       if (v.kid_id === req.kid.id) return res.status(400).json({ error: 'Give your award to someone else!' });
+      if (v.brief_date !== dayISO()) return res.status(409).json({ error: 'Awards are for today’s videos' });
       if (!(await premiereState(scope, v.brief_date)).revealed) return res.status(409).json({ error: 'Not premiered yet' });
       const out = await tx(async (c) => {
         const ins = await c.query(

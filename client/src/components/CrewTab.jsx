@@ -9,10 +9,17 @@ export default function CrewTab({ kid }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [awardFor, setAwardFor] = useState(null);
+  const [day, setDay] = useState(null); // null = today
 
   const load = useCallback(() => {
-    api.get('/api/kid/crew').then(setData).catch((e) => setError(e.message));
-  }, []);
+    api
+      .get(`/api/kid/crew${day ? `?date=${day}` : ''}`)
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
+      .catch((e) => setError(e.message));
+  }, [day]);
   useEffect(() => {
     load();
     const t = setInterval(load, 20000);
@@ -47,19 +54,37 @@ export default function CrewTab({ kid }) {
   };
 
   const hoursLeft = Math.max(0, data.premiereHour - data.hourNow);
+  const isToday = data.date === data.today;
 
   return (
     <main className="crew-main">
       <div className="crew-head">
         <h1 className="hero-title small">{data.crew ? data.crew.name : 'My premieres'}</h1>
-        {data.crew && !data.revealed && (
+        {data.crew && isToday && !data.revealed && (
           <div className="premiere-wait">
             🍿 Premiere {hoursLeft > 0 ? `in about ${hoursLeft}h (6pm)` : 'soon'} or when everyone has posted
           </div>
         )}
-        {data.revealed && data.crew && <div className="premiere-live">🎉 PREMIERE IS LIVE</div>}
+        {isToday && data.revealed && data.crew && <div className="premiere-live">🎉 PREMIERE IS LIVE</div>}
         {!data.crew && <div className="muted-line">Ask a grown-up to join a crew with your friends.</div>}
       </div>
+
+      {data.days?.length > 1 && (
+        <div className="day-picker" role="tablist" aria-label="Pick a day">
+          {data.days.map((d) => (
+            <button
+              key={d}
+              role="tab"
+              aria-selected={d === data.date}
+              className={`day-chip ${d === data.date ? 'on' : ''}`}
+              onClick={() => setDay(d === data.today ? null : d)}
+            >
+              {dayLabel(d, data.today)}
+            </button>
+          ))}
+        </div>
+      )}
+      {!isToday && data.feed.length === 0 && <div className="muted-line">No videos from this day.</div>}
 
       <div className="feed">
         {data.feed.map((f) => (
@@ -87,7 +112,7 @@ export default function CrewTab({ kid }) {
                     </button>
                   ))}
                 </div>
-                {!f.me && data.revealed && !data.myAward && (
+                {!f.me && isToday && data.revealed && !data.myAward && (
                   <button className="big-btn ghost small" onClick={() => setAwardFor(f.video.id)}>
                     🏅 Give an award
                   </button>
@@ -105,7 +130,7 @@ export default function CrewTab({ kid }) {
       </div>
 
 
-      {data.premiereNight.available && (
+      {isToday && data.premiereNight.available && (
         <section className="premiere-night">
           <h2>🎬 Friday Premiere Night</h2>
           {data.premiereNight.url ? (
@@ -136,4 +161,13 @@ export default function CrewTab({ kid }) {
       )}
     </main>
   );
+}
+
+const DAY_MS = 86400000;
+/** "Today", "Yesterday", then "Mon 10 Nov". */
+function dayLabel(iso, today) {
+  const back = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${iso}T12:00:00Z`)) / DAY_MS);
+  if (back === 0) return 'Today';
+  if (back === 1) return 'Yesterday';
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
