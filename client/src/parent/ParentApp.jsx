@@ -14,7 +14,7 @@ import { Keywords, AdminBriefs } from './Words.jsx';
 const TABS = [
   ['kids', 'Kids'],
   ['dobs', 'Dibbly Dobs'],
-  ['approvals', 'Approvals'],
+  ['approvals', 'Videos & letters'],
   ['briefs', 'Daily briefs', 'admin'],
   ['keywords', 'Keywords'],
   ['crews', 'Crews'],
@@ -470,10 +470,10 @@ function Approvals({ onChange }) {
       onChange();
     });
   if (!videos) return <div className="muted">Loading…</div>;
-  const label = { submitted: 'Waiting for you', approved: 'Approved', rejected: 'Not approved', ready: 'Edited, not posted', rendering: 'Editing…', uploaded: 'Editing…', failed: 'Edit failed' };
+  const label = { submitted: 'Waiting for you', approved: 'Live', rejected: 'Removed', ready: 'Edited, not posted', rendering: 'Editing…', uploaded: 'Editing…', failed: 'Edit failed' };
   return (
     <section>
-      <p className="muted">Nothing is shown to your child’s crew until you approve it. Crews see approved videos together at the premiere (when everyone has posted, or 6pm).</p>
+      <p className="muted">Videos go live as soon as your child posts them, and you get a notification. Not happy with one? Tap Remove and their crew can’t see it any more (you can put it back later). Crews see each day’s videos together at the premiere (when everyone has posted, or 6pm).</p>
       {err && <div className="notice">{err}</div>}
       {letters.length > 0 && <h2 className="p-sub">Stories & letters</h2>}
       {letters.map((l) => (
@@ -501,7 +501,7 @@ function Approvals({ onChange }) {
       <h2 className="p-sub">Star Studio videos</h2>
       {!videos.length && <div className="muted">No videos yet.</div>}
       {videos.map((v) => (
-        <div key={v.id} className={`p-card ${v.status === 'submitted' ? 'highlight' : ''}`}>
+        <div key={v.id} className="p-card">
           <div className="p-card-head">
             <h2>
               {v.title} <span className="muted">· {v.channelName} · {v.date}</span>
@@ -510,15 +510,15 @@ function Approvals({ onChange }) {
           </div>
           {v.finalUrl && <Video className="p-video" src={v.finalUrl} poster={v.thumbUrl} />}
           <div className="p-actions">
-            {v.status === 'submitted' && (
-              <>
-                <button className="btn primary" onClick={() => act(v.id, 'approve')} disabled={Boolean(busy)}>
-                  ✓ Approve
-                </button>
-                <button className="btn" onClick={() => act(v.id, 'reject')} disabled={Boolean(busy)}>
-                  Don’t share
-                </button>
-              </>
+            {(v.status === 'approved' || v.status === 'submitted') && (
+              <button className="btn" onClick={() => act(v.id, 'reject')} disabled={Boolean(busy)}>
+                🚫 Remove
+              </button>
+            )}
+            {v.status === 'rejected' && (
+              <button className="btn" onClick={() => act(v.id, 'approve')} disabled={Boolean(busy)}>
+                ↩︎ Put it back
+              </button>
             )}
             {v.rawUrl && (
               <a className="btn" href={v.rawUrl} target="_blank" rel="noreferrer">

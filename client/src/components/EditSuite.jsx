@@ -167,7 +167,7 @@ export default function EditSuite({ brief, plan, take, existing, title, track, o
                 🏆 New trophy: {TROPHY_NAMES[t] || t}!
               </div>
             ))}
-            <p className="muted-line">A grown-up will check it, then it premieres to your crew.</p>
+            <p className="muted-line">It premieres to your crew when everyone has posted, or at 6pm.</p>
             <button className="big-btn primary" onClick={onDone}>
               Back to the studio
             </button>

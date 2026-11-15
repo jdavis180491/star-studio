@@ -232,3 +232,56 @@ test('a forgiving match never accepts a word that is really one further on ("you
   assert.equal(t.tokens[s.nextIndex].norm, 'young');
   assert.equal(s.stuck, 3);
 });
+
+// ---- Never light a word the child didn't say (found by simulated children skipping and misreading).
+const feedAll = (t, said, mode = 'stream') => {
+  const words = said.split(/\s+/);
+  for (let i = 1; i <= words.length; i++) t.ingest(mode === 'stream' ? 'el-1' : `s${Math.floor((i - 1) / 4)}`, (mode === 'stream' ? words.slice(0, i) : words.slice(Math.floor((i - 1) / 4) * 4, i)).join(' '));
+  return t;
+};
+const lit = (t) => t.tokens.filter((_, i) => t.status[i] !== 'unread').map((x) => x.norm);
+
+test('skipping a word: the same word said later in the passage does not count for it', () => {
+  for (const mode of ['stream', 'sessions']) {
+    const t = feedAll(new ReadingTracker('You are a robot chef. Can you cook a pizza for us?', []), 'are a robot chef Can you cook a pizza for us', mode);
+    assert.equal(t.status[0], 'unread', `"You" stays unread (${mode})`);
+    assert.equal(t.snapshot().unlocked, false);
+  }
+});
+
+test('skipping a word: a similar word further on ("sneaky", "have") does not count for it', () => {
+  const text = 'Breaking news! A sneaky monster has stolen every left sock in your house. Monsters have super ears. Show us your best sneaky tiptoe.';
+  const t = feedAll(new ReadingTracker(text, []), 'Breaking news A sneaky monster um er stolen every left sock in your house Monsters have super ears Show us your best sneaky tiptoe');
+  assert.ok(!lit(t).includes('has'), '"has" was never said');
+  const t2 = feedAll(new ReadingTracker(text, []), 'Breaking news A come come monster has stolen every left sock in your house Monsters have super ears Show us your best sneaky tiptoe');
+  assert.equal(t2.status[t2.tokens.findIndex((x) => x.norm === 'sneaky')], 'unread', 'the first "sneaky" was never said');
+});
+
+test('a near-miss never counts when it is exactly the next word or a word just read', () => {
+  const t = feedAll(new ReadingTracker('Tap the magic hat. What pops out? Show us!', []), 'Tap the magic What pops out Show us');
+  assert.equal(t.status[3], 'unread', '"What" is not "hat"');
+  const t2 = feedAll(new ReadingTracker('Tap the magic hat. What pops out? Show us!', []), 'Tap the magic hat Tap the magic hat');
+  assert.equal(t2.status[4], 'unread', 're-reading "hat" is not "What"');
+});
+
+test('reading the wrong everyday word ("them" for "then", "look" for "like") does not count', () => {
+  for (const [text, said, word] of [
+    ['Dance, then freeze!', 'Dance them freeze', 'then'],
+    ['Be tall like a giraffe.', 'Be tall look a giraffe', 'like'],
+    ['Be a turtle. Hide in your shell.', 'Be a turtle in in your shell', 'hide'],
+    ['Flap your wings!', 'Flap your went went', 'wings'],
+  ]) {
+    const t = feedAll(new ReadingTracker(text, []), said);
+    assert.ok(!lit(t).includes(word), `"${word}" was not read in: ${said}`);
+  }
+});
+
+test('a mumble is not a word ("wuh" is not "wish")', () => {
+  const t = feedAll(new ReadingTracker('Make a wish! Close your eyes.', []), 'Make a blah wuh Close your eyes');
+  assert.equal(t.status[2], 'unread');
+});
+
+test('"step" does not count for "steps" when "step" is the very next word', () => {
+  const t = feedAll(new ReadingTracker('Follow the steps. Step, step, jump!', []), 'Follow the Step step jump');
+  assert.equal(t.status[2], 'unread');
+});

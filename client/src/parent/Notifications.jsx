@@ -86,7 +86,7 @@ export default function NotificationsCard() {
   return (
     <div className="p-card">
       <h2>🔔 Phone notifications</h2>
-      <p className="muted">Get a notification on your phone when something needs approving, or when a child earns a Dibbly Dob.</p>
+      <p className="muted">Get a notification on your phone when your child posts a video, when a story needs checking, or when a child earns a Dibbly Dob.</p>
 
       {!supported && isIOS() && !isStandalone() ? (
         <div className="notify-steps">
@@ -125,7 +125,7 @@ export default function NotificationsCard() {
       <div className="field-label">Notify me when…</div>
       <label className="consent">
         <input type="checkbox" checked={info.prefs.approvals} onChange={(e) => setPref('approvals', e.target.checked)} />
-        <span>a video or story needs approving</span>
+        <span>a new video is posted, or a story needs checking</span>
       </label>
       <label className="consent">
         <input type="checkbox" checked={info.prefs.dobs} onChange={(e) => setPref('dobs', e.target.checked)} />

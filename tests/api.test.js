@@ -202,27 +202,28 @@ test('star studio API end to end', { skip: !DB, timeout: 240000 }, async (t) => 
   assert.equal((await A.post('/api/kid/videos', { plan })).status, 409, 'one challenge a day');
 
   await B.post('/api/kid/login', { kidId: kidB.id, pin: '5555' });
+  // Posted = live straight away (no approval). Crew-mates still see it at the premiere.
   let feedB = (await B.get('/api/kid/crew')).data;
-  const aRow = feedB.feed.find((f) => f.kid.id === kidA.id);
-  assert.equal(aRow.state, 'waiting-approval');
-  assert.equal(aRow.video, null);
-  assert.equal((await B.get(ready.finalUrl)).status, 403, 'crew-mate cannot watch before premiere');
-
-  // Parent A approves. Premiere waits for everyone (unless it's past 6pm)
-  const approvals = (await A.get('/api/parent/videos')).data.videos;
-  assert.equal(approvals[0].status, 'submitted');
-  assert.equal((await A.post(`/api/parent/videos/${vid}/approve`)).status, 200);
-  feedB = (await B.get('/api/kid/crew')).data;
   const after6 = feedB.hourNow >= feedB.premiereHour;
+  const aRow = feedB.feed.find((f) => f.kid.id === kidA.id);
+  assert.equal(aRow.state, after6 ? 'revealed' : 'locked');
   assert.equal(feedB.revealed, after6);
+  assert.equal((await B.get(ready.finalUrl)).status, after6 ? 200 : 403, 'crew-mates only watch at the premiere');
+  const approvals = (await A.get('/api/parent/videos')).data.videos;
+  assert.equal(approvals[0].status, 'approved', 'live without a grown-up approving it');
+
+  // The grown-up can remove it (crew can't see it) and put it back.
+  assert.equal((await A.post(`/api/parent/videos/${vid}/reject`)).status, 200);
+  assert.equal((await B.get('/api/kid/crew')).data.feed.find((f) => f.kid.id === kidA.id).state, 'not-posted');
+  assert.equal((await B.get(ready.finalUrl)).status, 403, 'removed videos cannot be watched by the crew');
+  assert.equal((await A.post(`/api/parent/videos/${vid}/approve`)).status, 200, 'put it back');
+  assert.equal((await A.get('/api/parent/videos')).data.videos[0].status, 'approved');
 
   // B posts too → everyone in → revealed regardless of the time
   const vidB = (await B.post('/api/kid/videos', { plan: { mood: 'epic', music: 'pop' }, title: 'Dino Roar' })).data.id;
   await B.put(`/api/kid/videos/${vidB}/raw`, fs.readFileSync(clip), { 'content-type': 'video/mp4' });
   await waitFor(async () => (await B.get(`/api/kid/videos/${vidB}`)).data.video.status === 'ready', 120000);
   await B.post(`/api/kid/videos/${vidB}/post`);
-  // B's parent is in parent mode from signup
-  assert.equal((await B.post(`/api/parent/videos/${vidB}/approve`)).status, 200);
   feedB = (await B.get('/api/kid/crew')).data;
   assert.equal(feedB.revealed, true);
   assert.equal((await B.get(ready.finalUrl)).status, 200, 'crew-mate can watch after premiere');

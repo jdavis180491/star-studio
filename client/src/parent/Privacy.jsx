@@ -64,7 +64,7 @@ export function PrivacyDoc() {
         <li>Videos are kept in private storage. There are no public links, no search and no way for strangers to find them.</li>
         <li>Each video can be watched only by your own family and, after the daily premiere, by the children in your child’s crew.</li>
         <li>Video links are made fresh each time and stop working after a short time, so a copied link can’t be shared.</li>
-        <li>You can approve, reject or delete any of your child’s videos.</li>
+        <li>Your child’s videos go live to their crew when posted, and you’re notified. You can remove (and put back) or delete any of them at any time.</li>
       </ul>
 
       <h3>6. Friends and crews are invite-only</h3>
@@ -95,7 +95,7 @@ export function PrivacyDoc() {
 
       <h3>9. Phone notifications (optional)</h3>
       <p>
-        If you turn on phone notifications, short messages such as “Ann earned a Dibbly Dob” or “A video is ready to approve” are sent to your phone
+        If you turn on phone notifications, short messages such as “Ann earned a Dibbly Dob” or “A new video is up” are sent to your phone
         through Apple’s or Google’s notification service. They are encrypted, so that service can’t read them. You can turn them off at any time.
       </p>
 

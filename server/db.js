@@ -278,6 +278,10 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS keyword_sets_kid ON keyword_sets (kid_id, ends);
   DELETE FROM briefs WHERE scope <> 'all';
   `,
+  // 7: videos go live as soon as they're posted (grown-ups can remove them). Safe to re-run.
+  `
+  UPDATE videos SET status = 'approved', approved_at = COALESCE(approved_at, now()) WHERE status = 'submitted';
+  `,
 ];
 
 export async function migrate() {
