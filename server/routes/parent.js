@@ -404,7 +404,7 @@ export function parentRouter() {
     try {
       const vids = await many(
         `SELECT v.*, k.channel_name, k.name AS kid_name FROM videos v JOIN kids k ON k.id = v.kid_id
-          WHERE k.family_id = $1 AND v.status <> 'new' ORDER BY (v.status = 'submitted') DESC, v.created_at DESC LIMIT 100`,
+          WHERE k.family_id = $1 AND v.status <> 'new' ORDER BY v.created_at DESC LIMIT 100`,
         [fam(req)]
       );
       res.json({ videos: vids.map((v) => ({ ...videoForClient(v, { owner: true }), channelName: v.channel_name, kidName: v.kid_name })) });
@@ -420,7 +420,8 @@ export function parentRouter() {
     try {
       const v = await ownVideo(req);
       if (!v) return res.status(404).json({ error: 'Not found' });
-      if (v.status !== 'submitted') return res.status(409).json({ error: 'Nothing to approve' });
+      // Also puts back a video a grown-up removed.
+      if (v.status !== 'submitted' && v.status !== 'rejected') return res.status(409).json({ error: 'Nothing to approve' });
       await q(`UPDATE videos SET status = 'approved', approved_at = now() WHERE id = $1`, [v.id]);
       res.json({ ok: true });
     } catch (e) {
@@ -432,6 +433,8 @@ export function parentRouter() {
     try {
       const v = await ownVideo(req);
       if (!v) return res.status(404).json({ error: 'Not found' });
+      // "Remove": hidden from the crew straight away (still in the family's list, can be put back).
+      if (!['submitted', 'approved'].includes(v.status)) return res.status(409).json({ error: 'Nothing to remove' });
       await q(`UPDATE videos SET status = 'rejected' WHERE id = $1`, [v.id]);
       res.json({ ok: true });
     } catch (e) {

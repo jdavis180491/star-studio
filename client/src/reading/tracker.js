@@ -12,9 +12,25 @@
 
 import { tokenizeBrief, spokenWords, wordsMatch, normalizeWord, isKeywordForm, levenshtein, soundKey } from './words.js';
 
+// Everyday words children often read instead of the right one ("then"/"them", "was"/"saw",
+// "look"/"like"). If the child clearly said one of these and it isn't the word on the page, that's
+// a misread, so a near-miss doesn't count for it.
+const COMMON = new Set(
+  `a about after again all also am an and any are as ask at away back bad bag ball be bed been before being best big bit both
+  boy but by call came can cat come comes could cut dad day did do does dog done down each eat even every far fast few find
+  first fly for found four from fun gave get girl give go goes going gone good got had has hat have he help her here him his
+  home hop hot house how if in into is it its jump just keep kind know last left let like little live long look looked lot
+  made make man many may me more most mum must my new next no not now of off old on once one only or other our out over own
+  play put ran read red ride right run said saw say see she should sit so some soon stop such sun take tell than that the
+  their them then there these they thing think this those three time to too took tree two up us very walk want was way we
+  well went were what when where which while who why will wish with word work would yes you your`.split(/\s+/)
+);
+const misread = (target, spoken) => spoken !== target && COMMON.has(spoken);
+
 // A child's attempt that's close to the word (the speech engine often mishears children).
+// Only for words of 4+ letters: short words ("is", "it", "on") must be heard properly.
 function closeTry(target, spoken) {
-  if (!spoken || spoken.length < 2) return false;
+  if (!spoken || target.length < 4 || spoken.length < 3 || misread(target, spoken)) return false;
   if (soundKey(target) === soundKey(spoken)) return true;
   if (target[0] !== spoken[0]) return false;
   return levenshtein(target, spoken) <= Math.ceil(target.length / 2);
@@ -46,6 +62,11 @@ export class ReadingTracker {
     this.helpedAt = null; // word help was used on this word
     this.sessionKey = null;
     this.sessionStart = 0;
+    // When a child reads on past a word, where they are further on (the next word we expect them
+    // to say if they keep going). While they're up there, words matching that place don't count
+    // for the word they skipped, even if the same word appears in both places ("you", "sneaky").
+    this.ahead = null;
+    this.sessionAhead = null;
     this.heard = '';
   }
 
@@ -63,6 +84,7 @@ export class ReadingTracker {
     if (sessionKey !== this.sessionKey) {
       this.sessionKey = sessionKey;
       this.sessionStart = this._skipDone(this.cursor);
+      this.sessionAhead = this.stuck !== null ? this.ahead : null;
     }
     this.heard = transcript;
     const words = spokenWords(transcript);
@@ -70,6 +92,7 @@ export class ReadingTracker {
     // Start where this session started, so words already read in it line up again.
     let cursor = this.sessionStart;
     let stuck = null;
+    let ahead = this.sessionAhead;
     let k = 0;
     const same = (i, word) =>
       i < this.tokens.length &&
@@ -95,9 +118,18 @@ export class ReadingTracker {
           cursor = m0.next;
           k += m0.consumed;
           stuck = null;
+          ahead = null;
         } else {
           k += 1;
         }
+        continue;
+      }
+      // Still reading on further ahead? Then this word belongs up there, not to the skipped word.
+      const onTrack = ahead !== null ? this._onTrack(words[k], ahead) : null;
+      if (onTrack !== null) {
+        ahead = onTrack + 1;
+        stuck = this._skipDone(cursor);
+        k += 1;
         continue;
       }
       const m = this._match(words, k, cursor);
@@ -107,10 +139,13 @@ export class ReadingTracker {
         cursor = this._skipDone(m.next);
         k += m.consumed;
         stuck = null;
+        ahead = null;
       } else if (this._ahead(words[k], cursor)) {
         stuck = cursor;
+        ahead = this._aheadAt(words[k], cursor) + 1;
         k += 1;
-      } else if (this._notATry(words[k], cursor)) {
+      } else if (this._notATry(words[k], cursor) || ahead !== null) {
+        // (Mumbles while they're reading on further ahead aren't tries at the skipped word.)
         k += 1;
       } else {
         // An attempt at the word that wasn't recognised. Two close tries count it.
@@ -136,6 +171,7 @@ export class ReadingTracker {
       cursor = this.tokens.length;
     }
     this.cursor = cursor;
+    this.ahead = stuck !== null ? ahead : null;
     if (this.missCursor !== null && this.missCursor !== this._skipDone(cursor)) {
       this.missCursor = null;
       this.misses = new Map();
@@ -161,8 +197,17 @@ export class ReadingTracker {
       if (j === this.helpedAt && closeTry(T[j].norm, w[k])) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
       // ("a", "an", "the" only ever match themselves: "the" must not swallow "tooth".)
       // A forgiving (not exact) match never counts if the word is exactly one further on: that's a skip.
-      const exact = wordsMatch(T[j].norm, w[k], T[j].filler ? { strict: true } : {});
-      const forgiving = !exact && !T[j].filler && T[j].norm.length >= 4 && wordsMatch(T[j].norm, w[k], { loose: true }) && !this._exactlyAhead(w[k], j);
+      // A near-miss ("hat" for "what") never counts if it's exactly a word coming up (that's a skip)
+      // or exactly a word they've just read (re-reading "hat" isn't "what").
+      // ("step" for "steps" counts, unless the very word "step" is coming up next: then it's a skip.)
+      const exact = T[j].norm === w[k] || (wordsMatch(T[j].norm, w[k], { strict: true }) && !this._identicalAhead(w[k], j));
+      const forgiving =
+        !exact &&
+        !T[j].filler &&
+        (wordsMatch(T[j].norm, w[k]) || (T[j].norm.length >= 5 && w[k].length >= 4 && wordsMatch(T[j].norm, w[k], { loose: true }))) &&
+        !misread(T[j].norm, w[k]) &&
+        !this._exactlyAhead(w[k], j) &&
+        !this._exactlyBehind(w[k], j);
       if (exact || forgiving) return { read: [j], filled: [...filled], next: j + 1, consumed: 1 };
       // Speech engine split one word in two ("sud den lee" for "suddenly")…
       if (k + 1 < w.length && wordsMatch(T[j].norm, w[k] + w[k + 1], { strict: true })) {
@@ -174,6 +219,27 @@ export class ReadingTracker {
       }
       if (!T[j].filler) break; // a real word must be read before moving on
       filled.push(j);
+    }
+    return null;
+  }
+
+  // Where further on is this word (the first unread match after the cursor)?
+  _aheadAt(word, cursor) {
+    const T = this.tokens;
+    for (let j = cursor + 1; j < T.length; j++) {
+      if (!T[j].filler && this.status[j] === 'unread' && wordsMatch(T[j].norm, word)) return j;
+    }
+    return cursor;
+  }
+
+  // Reading on from `from` (allowing a couple of skipped or tiny words): which token is this word?
+  _onTrack(word, from) {
+    if (!word) return null;
+    const T = this.tokens;
+    let real = 0;
+    for (let j = from; j < T.length && real <= 2; j++) {
+      if (FILLERS.has(word) ? T[j].filler && T[j].norm === word : !T[j].filler && wordsMatch(T[j].norm, word)) return j;
+      if (!T[j].filler) real += 1;
     }
     return null;
   }
@@ -193,6 +259,18 @@ export class ReadingTracker {
     for (let i = j + 1; i < Math.min(T.length, j + 1 + LOOKAHEAD); i++) {
       if (this.status[i] === 'unread' && wordsMatch(T[i].norm, word, T[i].filler ? { strict: true } : {})) return true;
     }
+    return false;
+  }
+
+  _identicalAhead(word, j) {
+    const T = this.tokens;
+    for (let i = j + 1; i < Math.min(T.length, j + 1 + 3); i++) if (this.status[i] === 'unread' && T[i].norm === word) return true;
+    return false;
+  }
+
+  _exactlyBehind(word, j) {
+    const T = this.tokens;
+    for (let i = Math.max(0, j - LOOKAHEAD); i < j; i++) if (T[i].norm === word) return true;
     return false;
   }
 
@@ -221,6 +299,7 @@ export class ReadingTracker {
     this.sessionKey = null;
     this.sessionStart = this.cursor;
     this.stuck = null;
+    this.ahead = null;
   }
 
   /**
@@ -233,6 +312,7 @@ export class ReadingTracker {
     this.sessionStart = this._skipDone(this.cursor);
     this.sessionKey = null;
     this.stuck = null;
+    this.ahead = null;
     this.missCursor = null;
     this.misses = new Map();
     this.needsHelp = null;

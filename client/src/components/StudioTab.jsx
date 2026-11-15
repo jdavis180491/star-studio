@@ -219,7 +219,7 @@ export function ChannelTab({ kid }) {
     api.get('/api/kid/channel').then(setData);
   }, []);
   if (!data) return <div className="loading">Loading…</div>;
-  const label = { submitted: 'Waiting for a grown-up', approved: 'Premiered', rejected: 'Not approved', ready: 'Not posted' };
+  const label = { submitted: 'Posted', approved: 'Posted', rejected: 'Taken down by a grown-up', ready: 'Not posted' };
   return (
     <main className="channel-main">
       <div className="channel-head">

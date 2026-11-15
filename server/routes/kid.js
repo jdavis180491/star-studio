@@ -228,12 +228,13 @@ export function kidRouter() {
         await c.query(`UPDATE kids SET streak = $2, best_streak = GREATEST(best_streak, $2), last_post_date = $3 WHERE id = $1`, [v.kid_id, streak, dayISO()]);
         const what = `Posted “${v.title || v.brief?.title}”${viral ? ' (viral hit: double Dobs!)' : ''}${kws.length ? ` + said ${kws.length} unlock word${kws.length > 1 ? 's' : ''} on camera` : ''}`;
         const g = await grant(c, v.kid_id, 'studio', { dobs, meta: { what, video: v.id, viral, keywords: kws }, quiet: true });
-        await c.query(`UPDATE videos SET status = 'submitted', submitted_at = now(), viral = $2, followers_awarded = $3 WHERE id = $1`, [v.id, viral, dobs]);
+        // Live straight away: grown-ups get a notification and can remove it if they need to.
+        await c.query(`UPDATE videos SET status = 'approved', submitted_at = now(), approved_at = now(), viral = $2, followers_awarded = $3 WHERE id = $1`, [v.id, viral, dobs]);
         const title = v.title || v.brief?.title || 'today’s video';
         later(() =>
           notifyFamily(req.kid.family_id, 'approvals', {
-            title: 'A video is ready to approve',
-            body: `${req.kid.name} posted “${title}” and earned ${dobs === 1 ? '1 Dob' : `${dobs} Dobs`}. Tap to watch and approve.`,
+            title: 'A new video is up',
+            body: `${req.kid.name} posted “${title}” and earned ${dobs === 1 ? '1 Dob' : `${dobs} Dobs`}. Tap to watch. You can remove it if you need to.`,
             url: '/parent?tab=approvals',
           })
         );

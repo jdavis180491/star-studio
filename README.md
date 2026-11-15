@@ -3,7 +3,7 @@
 A private learning and creativity app for children aged 4–11, played on an iPad in Safari.
 Children earn **1 Dibbly Dob** for every activity they finish (the same for every family, so it's fair).
 Grown-ups can add Dobs for good behaviour, take some away, or take off what they spend at the shops.
-Word help is always free. Grown-ups can get **phone notifications** when something needs approving or a child earns a Dob.
+Word help is always free. Grown-ups can get **phone notifications** when a video is posted, a story needs checking, or a child earns a Dob.
 
 **Five sections:**
 - 🎬 **Star Studio**: the once-a-day video challenge. Read the script, then a word moment, a call with the Director, the live effects camera, the auto-edit, and finally the crew premiere.
